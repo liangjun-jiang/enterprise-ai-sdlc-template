@@ -1,0 +1,61 @@
+name: Execution Plan → GitHub Issues
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [plan-execution]
+    paths: ["docs/execution-plans/**"]
+
+jobs:
+  create-issues:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: plan-execution
+          fetch-depth: 0
+
+      - uses: jdx/mise-action@v2
+
+      - name: Validate input
+        run: |
+          EXEC_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^docs/execution-plans/" | grep "EXECUTION_PLAN.md" | head -1)
+          if [ -z "$EXEC_FILE" ]; then
+            echo "::error::No EXECUTION_PLAN.md found in merged changes."
+            exit 1
+          fi
+          echo "EXEC_FILE=$EXEC_FILE" >> "$GITHUB_ENV"
+
+      - name: Check circuit breaker
+        run: |
+          ACTIVE=$(python3 -c "import json; c=json.load(open('docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
+          if [ "$ACTIVE" = "true" ]; then
+            echo "::error::Circuit breaker is active."
+            exit 1
+          fi
+
+      - name: Install script dependencies
+        run: uv sync --frozen
+        working-directory: .claude/scripts
+
+      - name: Create GitHub Issues
+        run: |
+          uv run --project .claude/scripts python .claude/scripts/parse_plan_to_issues.py \
+            --execution-plan-file "$EXEC_FILE" \
+            --repo "${{ github.repository }}"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: '❌ `execution-to-issues` workflow failed. Check the [Actions run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
+            });

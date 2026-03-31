@@ -1,0 +1,82 @@
+name: Plan → Execution Plan
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [plan]
+    paths: ["docs/plans/**"]
+
+jobs:
+  generate:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: plan
+          fetch-depth: 0
+
+      - uses: jdx/mise-action@v2
+
+      - name: Validate input
+        run: |
+          PLAN_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^docs/plans/" | grep "PLAN.md" | head -1)
+          if [ -z "$PLAN_FILE" ]; then
+            echo "::error::No PLAN.md found in merged changes under docs/plans/"
+            exit 1
+          fi
+          echo "PLAN_FILE=$PLAN_FILE" >> "$GITHUB_ENV"
+          FEATURE_SLUG=$(echo "$PLAN_FILE" | sed 's|docs/plans/||' | sed 's|/PLAN.md||')
+          echo "FEATURE_SLUG=$FEATURE_SLUG" >> "$GITHUB_ENV"
+          echo "OUTPUT_FILE=docs/execution-plans/$FEATURE_SLUG/EXECUTION_PLAN.md" >> "$GITHUB_ENV"
+
+      - name: Check circuit breaker
+        run: |
+          ACTIVE=$(python3 -c "import json; c=json.load(open('docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
+          if [ "$ACTIVE" = "true" ]; then
+            echo "::error::Circuit breaker is active. Set circuit_breaker_active=false to resume."
+            exit 1
+          fi
+
+      - name: Install script dependencies
+        run: uv sync --frozen
+        working-directory: .claude/scripts
+
+      - name: Generate execution plan
+        run: |
+          uv run --project .claude/scripts python .claude/scripts/generate_execution_plan.py \
+            --plan-file "$PLAN_FILE" \
+            --context-dir docs/context \
+            --output-file "$OUTPUT_FILE"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Open PR to plan-execution
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="execution-plan/${{ env.FEATURE_SLUG }}"
+          git checkout -b "$BRANCH"
+          git add "${{ env.OUTPUT_FILE }}"
+          git commit -m "feat: execution plan for ${{ env.FEATURE_SLUG }}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "Execution Plan: ${{ env.FEATURE_SLUG }}" \
+            --body "Auto-generated execution plan from \`${{ env.PLAN_FILE }}\`. Review and merge to create GitHub Issues." \
+            --base plan-execution \
+            --head "$BRANCH" \
+            --label "ai-generated"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: '❌ `plan-to-execution` workflow failed. Check the [Actions run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
+            });

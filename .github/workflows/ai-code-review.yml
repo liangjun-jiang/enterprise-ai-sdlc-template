@@ -1,0 +1,52 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [dev]
+
+jobs:
+  review:
+    # Only review PRs labeled ai-generated (skip human PRs to avoid noise)
+    if: contains(github.event.pull_request.labels.*.name, 'ai-generated')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - uses: jdx/mise-action@v2
+
+      - name: Check circuit breaker
+        run: |
+          ACTIVE=$(python3 -c "import json; c=json.load(open('docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
+          if [ "$ACTIVE" = "true" ]; then
+            echo "::error::Circuit breaker is active."
+            exit 1
+          fi
+
+      - name: Install script dependencies
+        run: uv sync --frozen
+        working-directory: .claude/scripts
+
+      - name: Post AI review
+        run: |
+          uv run --project .claude/scripts python .claude/scripts/review_code.py \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --context-dir docs/context
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: '❌ `ai-code-review` workflow failed. Check the [Actions run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
+            });

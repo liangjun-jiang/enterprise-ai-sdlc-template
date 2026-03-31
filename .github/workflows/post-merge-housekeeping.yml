@@ -1,0 +1,69 @@
+name: Post-Merge Housekeeping
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [dev]
+
+jobs:
+  housekeeping:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'ai-generated')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - uses: jdx/mise-action@v2
+
+      - name: Check circuit breaker
+        run: |
+          ACTIVE=$(python3 -c "import json; c=json.load(open('docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
+          if [ "$ACTIVE" = "true" ]; then
+            echo "::error::Circuit breaker is active."
+            exit 1
+          fi
+
+      - name: Install script dependencies
+        run: uv sync --frozen
+        working-directory: .claude/scripts
+
+      - name: Update context docs
+        run: |
+          uv run --project .claude/scripts python .claude/scripts/update_context_docs.py \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --context-dir docs/context
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Close linked issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const matches = body.matchAll(/[Cc]loses\s+#(\d+)/g);
+            for (const match of matches) {
+              const issueNumber = parseInt(match[1]);
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                state: 'closed',
+                state_reason: 'completed'
+              });
+              console.log(`Closed issue #${issueNumber}`);
+            }
+
+      - name: Comment on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: '⚠️ `post-merge-housekeeping` failed. Context docs may need manual update. Check the [Actions run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).'
+            });
