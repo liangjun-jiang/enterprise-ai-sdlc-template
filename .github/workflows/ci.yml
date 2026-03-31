@@ -10,6 +10,8 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    env:
+      MISE_PYTHON_GITHUB_ATTESTATIONS: "false"
     defaults:
       run:
         working-directory: backend
@@ -33,6 +35,8 @@ jobs:
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
+    env:
+      MISE_PYTHON_GITHUB_ATTESTATIONS: "false"
     defaults:
       run:
         working-directory: frontend
