@@ -1,0 +1,41 @@
+# CODEOWNERS
+#
+# Defines who must review changes to specific paths.
+# Syntax: <path pattern>  <owner(s)>
+#
+# GitHub docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# --- Docs / context layer ---
+# Tech Lead must review any changes to the AI context docs and system prompts.
+# These files directly affect the quality of all AI-generated output.
+docs/context/                   @tech-lead
+docs/schemas/                   @tech-lead
+
+# --- PRDs ---
+# Product Owner owns all product requirement documents.
+docs/prd/                       @product-owner
+
+# --- Roadmap / milestones ---
+# Project Manager owns milestone files.
+docs/roadmap/                   @project-manager
+
+# --- AI pipeline scripts ---
+# Tech Lead must review changes to the scripts that call Claude and interact with GitHub.
+.claude/scripts/                @tech-lead
+
+# --- GitHub Actions workflows ---
+# Tech Lead must review workflow changes (security-sensitive).
+.github/workflows/              @tech-lead
+
+# --- Backend ---
+# Any engineer can review backend changes; no single owner enforced.
+# Add a specific handle here if you want a mandatory reviewer:
+# backend/                      @backend-lead
+
+# --- Frontend ---
+# frontend/                     @frontend-lead
+
+# --- AI-generated PRs ---
+# PRs labeled `ai-generated` are reviewed by humans — no bot account needed.
+# The ai-code-review.yml workflow posts an automated review as a first pass,
+# but a human must approve before merge (enforced by branch protection on dev).
