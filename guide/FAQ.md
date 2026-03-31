@@ -89,3 +89,31 @@ Check `docs/context/AI_PIPELINE_CONFIG.json` in the `plan-execution` or `plan` b
 ### Can I use a different LLM provider?
 
 Yes, via LiteLLM. Set `ANTHROPIC_BASE_URL` to your LiteLLM gateway URL and configure LiteLLM to route `claude-opus-4-6` and `claude-sonnet-4-6` to your chosen provider. Model names in `AI_PIPELINE_CONFIG.json` stay the same.
+
+---
+
+## Bugs
+
+### I filed a bug issue. Will AI fix it automatically?
+
+No — not until you explicitly add the `ready-for-ai-coding` label.
+
+When you create an issue with the `bug` label, nothing triggers automatically. The flow is:
+
+1. PM or Tech Lead triages the issue — is it clear and reproducible?
+2. If yes, they either add `ready-for-ai-coding` (AI fixes it) or assign it to a developer (human fixes it)
+3. Once labeled, `ai-code-writer.yml` fires and the fix goes through the normal PR → review → merge pipeline
+
+The label is the explicit human sign-off that the bug is well-described enough for AI to act on. A vague bug report will produce a vague fix — make sure the issue includes reproduction steps and expected vs. actual behavior before labeling it.
+
+### What makes a good bug report for AI?
+
+The AI reads the issue body exactly as written. Include:
+
+- **What happened** — the exact error message or unexpected behavior
+- **Steps to reproduce** — numbered, specific
+- **Expected behavior** — what should have happened
+- **Affected files** — if you know them, list them; this helps the AI scope its fix correctly
+- **Environment** — browser, OS, version if relevant
+
+The more specific the issue, the better the fix.
