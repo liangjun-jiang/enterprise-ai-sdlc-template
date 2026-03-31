@@ -18,6 +18,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import yaml
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 from _shared import (
@@ -41,6 +43,43 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def read_plan_frontmatter(plan_content: str) -> dict[str, str]:
+    if not plan_content.startswith("---"):
+        return {}
+    end = plan_content.find("---", 3)
+    if end == -1:
+        return {}
+    try:
+        result: dict[str, str] = yaml.safe_load(plan_content[3:end]) or {}
+        return result
+    except yaml.YAMLError:
+        return {}
+
+
+def load_upstream_context(frontmatter: dict[str, str], repo_root: Path) -> str:
+    """Optionally load PRD and milestone files referenced in plan frontmatter."""
+    parts: list[str] = []
+
+    prd_ref = frontmatter.get("prd_ref", "")
+    if prd_ref:
+        prd_path = repo_root / prd_ref
+        if prd_path.exists():
+            parts.append(f"## Product Requirements Document\n\n{prd_path.read_text()}")
+            print(f"[info] Loaded PRD: {prd_ref}")
+        else:
+            print(f"[warn] prd_ref points to missing file: {prd_path}", file=sys.stderr)
+
+    milestone_id = frontmatter.get("milestone", "")
+    if milestone_id and milestone_id != "ad-hoc":
+        roadmap_dir = repo_root / "docs" / "roadmap"
+        matches = list(roadmap_dir.glob(f"{milestone_id}*.md")) if roadmap_dir.exists() else []
+        if matches:
+            parts.append(f"## Milestone\n\n{matches[0].read_text()}")
+            print(f"[info] Loaded milestone: {matches[0].name}")
+
+    return "\n\n---\n\n".join(parts)
+
+
 def main() -> None:
     args = parse_args()
     repo_root = find_repo_root()
@@ -56,16 +95,21 @@ def main() -> None:
         die(f"Plan file not found: {plan_path}")
 
     plan_content = plan_path.read_text()
+    frontmatter = read_plan_frontmatter(plan_content)
+    upstream_context = load_upstream_context(frontmatter, repo_root)
+
     context_docs = load_context_docs(context_dir)
     system_prompt = load_system_prompt(context_dir, "SYSTEM_PROMPT_PLANNER.md")
     model = config["models"]["planner"]
     max_context = config["token_budget"]["max_context_tokens"]
     max_output = config["token_budget"]["max_output_tokens"]
 
-    user_message = apply_token_budget(
-        f"# Feature Plan\n\n{plan_content}\n\n---\n\n# Context Documents\n\n{context_docs}",
-        max_context,
-    )
+    sections = [f"# Feature Plan\n\n{plan_content}"]
+    if upstream_context:
+        sections.append(f"# Upstream Context (PRD / Milestone)\n\n{upstream_context}")
+    sections.append(f"# Project Context\n\n{context_docs}")
+
+    user_message = apply_token_budget("\n\n---\n\n".join(sections), max_context)
 
     print(f"[info] Calling {model} to generate execution plan...", flush=True)
     execution_plan = call_claude(

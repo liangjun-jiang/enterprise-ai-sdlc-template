@@ -3,6 +3,8 @@ author: Jane Smith
 approver: ""
 feature: feature-000-example
 priority: medium
+milestone: ad-hoc
+prd_ref: ""
 assignees:
   planning: Jane Smith
   development: ""

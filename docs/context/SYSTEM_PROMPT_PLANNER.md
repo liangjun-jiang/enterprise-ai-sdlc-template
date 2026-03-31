@@ -55,12 +55,19 @@ If the Feature Plan is missing critical information (e.g., does not specify the 
 
 ## Context You Will Receive
 
-- The Feature Plan (`PLAN.md`) — includes YAML frontmatter with `author`, `approver`, and `assignees`
+- The Feature Plan (`PLAN.md`) — includes YAML frontmatter with `author`, `approver`, `milestone`, `prd_ref`, and `assignees`
+- *(Optional)* The referenced PRD — provides business purpose, target users, and success metrics
+- *(Optional)* The referenced Milestone — provides scope boundaries and what is deferred
 - `docs/context/ARCHITECTURE.md`
 - `docs/context/CURRENT_TECH_STACK.md`
 - `docs/context/CODING_STANDARDS.md`
 - `docs/context/DATA_MODELS.md`
 - `docs/context/API_CONTRACTS.md`
+
+When PRD and Milestone context is provided, use it to:
+1. Ensure the task breakdown serves the stated business goal
+2. Flag any requirement in the Feature Plan that contradicts the PRD's Out of Scope section
+3. Keep tasks within the milestone's scope — do not plan work deferred to future milestones
 
 ## Attribution
 

@@ -20,6 +20,7 @@
     "max_output_tokens": 8192
   },
   "branches": {
+    "roadmap": "roadmap",
     "plan": "plan",
     "plan_execution": "plan-execution",
     "dev": "dev",

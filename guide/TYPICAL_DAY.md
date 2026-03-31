@@ -6,7 +6,7 @@ Everyone on the team interacts with the same GitHub repo, but at different layer
 
 ## Product Owner
 
-Your primary artifact is the **Feature Plan** (`PLAN.md`). You define what gets built and why. The AI handles decomposition and implementation from there.
+Your primary artifacts are the **PRD** (`docs/prd/`) and approved **Feature Plans** (`docs/plans/`). You define what gets built and why. The AI handles decomposition and implementation from there.
 
 **Morning**
 - Check the Project board for features in progress — are execution plans approved and tasks flowing to the board?
@@ -14,21 +14,24 @@ Your primary artifact is the **Feature Plan** (`PLAN.md`). You define what gets 
 - If an Execution Plan looks wrong (wrong scope, missing a requirement), comment and request changes — don't merge until it reflects your intent
 
 **During the day**
-- When you have a new feature to build, create `docs/plans/<feature-slug>/PLAN.md` on a new branch
-- Include YAML frontmatter at the top (see format below) with your name as `author` and proposed `assignees`
-- Open a PR to the `plan` branch — this is the human gate where scope is agreed before any AI work starts
-- Work with the Project Manager to prioritize which issues on the board get labeled `ready-for-ai-coding`
+- When you have a new initiative, create `docs/prd/prd-NNN-title.md` — PRDs are always human-authored
+- Work with the Project Manager to create a milestone file in `docs/roadmap/` referencing your PRD
+- When a milestone PR merges to the `roadmap` branch, `milestone-to-plans.yml` fires automatically and generates Feature Plans for review
+- For ad-hoc work with no milestone backing it, create `docs/plans/<feature-slug>/PLAN.md` directly and set `milestone: ad-hoc`
+- All plan files include YAML frontmatter with your name as `author`, proposed `assignees`, and a `prd_ref` if applicable
 
 **PLAN.md frontmatter format:**
 ```yaml
 ---
 author: Jane Smith
-approver: ""           # filled in by the person who merges the PR
-feature: add-version-endpoint
+approver: ""
+feature: feature-slug
 priority: medium
+milestone: milestone-001
+prd_ref: docs/prd/prd-000-dashboard.md
 assignees:
   planning: Jane Smith
-  development: ""      # leave blank to let the PM assign
+  development: ""
   review: Alex Chen
   qa: ""
 ---
@@ -36,7 +39,7 @@ assignees:
 
 **End of day**
 - Are any features blocked waiting for your approval on an execution plan PR? Unblock them.
-- Update `priority` in open Feature Plans if business needs have shifted
+- If business priorities have shifted, update `status:` in the relevant PRD or milestone file
 
 ---
 
@@ -51,6 +54,8 @@ Your job is **flow**. You keep tasks moving from the plan stage through to merge
 - Review any overnight workflow failures (Actions tab) — failed runs post comments on the relevant issue/PR
 
 **During the day**
+- When the Product Owner has a new PRD, work with them to create the milestone file in `docs/roadmap/`
+- Open a PR for the milestone file to the `roadmap` branch — merging it triggers automatic Feature Plan generation
 - When an Execution Plan PR is opened, coordinate with the Tech Lead to review it
 - Merge approved Execution Plans → issues are created automatically with assignees from the frontmatter
 - Label tasks `ready-for-ai-coding` once they're unblocked and prioritized
@@ -171,8 +176,8 @@ You are the **signal source** for bugs and pain points. Your job is to translate
 
 | Role | Primary artifact | Main GitHub action |
 |------|-----------------|-------------------|
-| Product Owner | `PLAN.md` | Open PRs to `plan` branch |
-| Project Manager | Project board | Assign issues, manage labels |
+| Product Owner | PRD (`docs/prd/`) + Feature Plans | Create PRDs, review execution plan PRs |
+| Project Manager | Milestone files (`docs/roadmap/`) + Project board | Create milestones, assign issues, manage labels |
 | Tech Lead | `docs/context/` | Review execution plans + AI PRs |
 | Developer | Code + PRs | Branch from `dev`, open PRs |
 | QA / Tester | Acceptance criteria | Review issues + AI PRs |
