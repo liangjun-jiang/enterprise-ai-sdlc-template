@@ -1,0 +1,19 @@
+[tools]
+python = "3.12.2"
+uv = "0.5.4"
+node = "20"
+
+[tasks.test]
+run = "uv run pytest"
+
+[tasks."lint:python"]
+run = "uvx ruff@0.7.4 check ."
+
+[tasks."format:python"]
+run = "uvx ruff@0.7.4 format ."
+
+[tasks."lint:frontend"]
+run = "npm --prefix frontend run lint"
+
+[tasks."test:frontend"]
+run = "npm --prefix frontend run test"
