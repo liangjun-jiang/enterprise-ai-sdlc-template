@@ -109,7 +109,11 @@ def anthropic_client() -> anthropic.Anthropic:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         die("ANTHROPIC_API_KEY environment variable is required")
-    return anthropic.Anthropic(api_key=api_key)
+    base_url = os.environ.get("ANTHROPIC_BASE_URL")
+    kwargs: dict[str, str] = {"api_key": api_key}
+    if base_url:
+        kwargs["base_url"] = base_url
+    return anthropic.Anthropic(**kwargs)  # type: ignore[arg-type]
 
 
 def call_claude(

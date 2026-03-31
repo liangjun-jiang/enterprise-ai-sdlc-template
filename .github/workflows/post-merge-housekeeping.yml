@@ -5,6 +5,11 @@ on:
     types: [closed]
     branches: [dev]
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
 jobs:
   housekeeping:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'ai-generated')
@@ -36,6 +41,7 @@ jobs:
             --context-dir docs/context
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Close linked issues

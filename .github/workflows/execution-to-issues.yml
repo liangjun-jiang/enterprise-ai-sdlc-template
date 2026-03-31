@@ -6,6 +6,11 @@ on:
     branches: [plan-execution]
     paths: ["docs/execution-plans/**"]
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
 jobs:
   create-issues:
     if: github.event.pull_request.merged == true
@@ -46,6 +51,7 @@ jobs:
             --repo "${{ github.repository }}"
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Comment on failure
