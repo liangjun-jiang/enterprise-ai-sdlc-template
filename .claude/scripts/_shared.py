@@ -36,19 +36,47 @@ def check_circuit_breaker(config: dict[str, Any]) -> None:
 # Context assembly
 # ---------------------------------------------------------------------------
 
-CONTEXT_FILES = [
-    "ARCHITECTURE.md",
-    "CURRENT_TECH_STACK.md",
-    "CODING_STANDARDS.md",
-    "DATA_MODELS.md",
-    "API_CONTRACTS.md",
-    "SECURITY_CHECKLIST.md",
-]
+_ALWAYS_INCLUDED = ["ARCHITECTURE.md", "SECURITY_CHECKLIST.md"]
+
+_BACKEND_FILES = ["CODING_STANDARDS.md", "DATA_MODELS.md", "API_CONTRACTS.md", "CURRENT_TECH_STACK.md"]
+_FRONTEND_FILES = ["CODING_STANDARDS.md", "API_CONTRACTS.md", "CURRENT_TECH_STACK.md"]
+
+# Fallback when no affected paths are provided
+CONTEXT_FILES = _ALWAYS_INCLUDED + _BACKEND_FILES + ["CODING_STANDARDS.md"]
 
 
-def load_context_docs(context_dir: Path, filenames: list[str] | None = None) -> str:
-    """Load context docs and concatenate them with headers."""
-    names = filenames or CONTEXT_FILES
+def context_files_for_paths(affected_paths: list[str]) -> list[str]:
+    """Return the minimal set of context doc filenames relevant to the given file paths."""
+    has_backend = any("backend/" in p for p in affected_paths)
+    has_frontend = any("frontend/" in p for p in affected_paths)
+    files = list(_ALWAYS_INCLUDED)
+    if has_backend:
+        files += _BACKEND_FILES
+    if has_frontend:
+        files += _FRONTEND_FILES
+    if not has_backend and not has_frontend:
+        files += _BACKEND_FILES  # safe default for scripts / unknown paths
+    return list(dict.fromkeys(files))  # deduplicate, preserve order
+
+
+def load_context_docs(
+    context_dir: Path,
+    filenames: list[str] | None = None,
+    affected_paths: list[str] | None = None,
+) -> str:
+    """Load context docs and concatenate them with headers.
+
+    Pass `affected_paths` for task-scoped loading (recommended).
+    Pass `filenames` to load an explicit list.
+    Falls back to CONTEXT_FILES when neither is provided.
+    """
+    if filenames is not None:
+        names = filenames
+    elif affected_paths is not None:
+        names = context_files_for_paths(affected_paths)
+    else:
+        names = CONTEXT_FILES
+
     parts: list[str] = []
     for name in names:
         path = context_dir / name

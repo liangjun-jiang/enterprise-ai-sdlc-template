@@ -167,7 +167,6 @@ def main() -> None:
     print(f"[info] Processing issue #{args.issue_number}: {issue.title}")
 
     context_dir = Path(args.context_dir)
-    context_docs = load_context_docs(context_dir)
     system_prompt = load_system_prompt(context_dir, "SYSTEM_PROMPT_CODER.md")
     model = config["models"]["coder"]
     max_context = config["token_budget"]["max_context_tokens"]
@@ -175,6 +174,8 @@ def main() -> None:
 
     affected_files = extract_affected_files(issue.body or "")
     print(f"[info] Affected files: {affected_files}")
+
+    context_docs = load_context_docs(context_dir, affected_paths=affected_files)
 
     user_message = build_user_message(
         issue_title=issue.title,
