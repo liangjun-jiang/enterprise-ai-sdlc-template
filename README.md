@@ -39,6 +39,10 @@ docker-compose up --build
 
 `GITHUB_TOKEN` is provided automatically by GitHub Actions — no manual setup needed.
 
+## Branch setup
+
+Required branches (`dev`, `plan`, `plan-execution`, `roadmap`) are created automatically on first push to `main` by `init-branches.yml`. No manual branch creation needed.
+
 ## Docs
 
 - [`guide/TYPICAL_DAY.md`](guide/TYPICAL_DAY.md) — how to use the pipeline day-to-day

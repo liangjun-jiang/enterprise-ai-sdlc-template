@@ -1,0 +1,36 @@
+name: Initialize Branches
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+
+permissions:
+  contents: write
+
+jobs:
+  init-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create required branches if missing
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          for BRANCH in dev plan plan-execution roadmap; do
+            if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+              echo "[info] Branch '$BRANCH' already exists — skipping"
+            else
+              git checkout -b "$BRANCH"
+              git push origin "$BRANCH"
+              echo "[info] Created branch '$BRANCH'"
+              git checkout main
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
