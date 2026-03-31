@@ -1,0 +1,36 @@
+{
+  "circuit_breaker_active": false,
+  "models": {
+    "planner": "claude-opus-4-6",
+    "coder": "claude-sonnet-4-6",
+    "reviewer": "claude-sonnet-4-6",
+    "issue_parser": "claude-sonnet-4-6",
+    "context_updater": "claude-sonnet-4-6"
+  },
+  "concurrency": {
+    "max_concurrent_prs": 3,
+    "max_concurrent_reviews": 5
+  },
+  "retry": {
+    "max_attempts": 2,
+    "backoff_seconds": 30
+  },
+  "token_budget": {
+    "max_context_tokens": 150000,
+    "max_output_tokens": 8192
+  },
+  "branches": {
+    "plan": "plan",
+    "plan_execution": "plan-execution",
+    "dev": "dev",
+    "main": "main"
+  },
+  "labels": {
+    "ai_generated": "ai-generated",
+    "ready_for_coding": "ready-for-ai-coding",
+    "ai_reviewed": "ai-reviewed",
+    "needs_human_review": "needs-human-review"
+  },
+  "context_docs_path": "docs/context",
+  "schemas_path": "docs/schemas"
+}
