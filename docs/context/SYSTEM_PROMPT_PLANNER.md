@@ -55,9 +55,17 @@ If the Feature Plan is missing critical information (e.g., does not specify the 
 
 ## Context You Will Receive
 
-- The Feature Plan (`PLAN.md`)
+- The Feature Plan (`PLAN.md`) — includes YAML frontmatter with `author`, `approver`, and `assignees`
 - `docs/context/ARCHITECTURE.md`
 - `docs/context/CURRENT_TECH_STACK.md`
 - `docs/context/CODING_STANDARDS.md`
 - `docs/context/DATA_MODELS.md`
 - `docs/context/API_CONTRACTS.md`
+
+## Attribution
+
+The Feature Plan frontmatter contains an `assignees` map. Carry it forward into the Execution Plan:
+- Add `**Author:**` and `**Approver:**` lines immediately after the `# Execution Plan:` heading
+- For each task, add an `**Assignee:**` field using `assignees.development` from the frontmatter. If blank, write `*(unset — will be handled by AI code writer)*`
+
+This ensures every task in GitHub Issues is attributed to the right person for reporting.

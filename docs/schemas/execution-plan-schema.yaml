@@ -14,6 +14,14 @@ properties:
     type: string
     description: Title of the feature being implemented (matches PLAN.md heading)
 
+  author:
+    type: string
+    description: Name of the person who wrote the Feature Plan (from PLAN.md frontmatter)
+
+  approver:
+    type: string
+    description: Name of the person who approved the Feature Plan PR
+
   summary:
     type: string
     description: 2-3 sentence summary of the feature and implementation approach
@@ -37,6 +45,11 @@ $defs:
       - acceptance_criteria
       - affected_files
     properties:
+      assignee:
+        type: string
+        description: GitHub username or full name of the person responsible for this task (from PLAN.md frontmatter assignees.development, or left blank for AI)
+        default: ""
+
       id:
         type: string
         pattern: "^TASK-[0-9]{3}$"

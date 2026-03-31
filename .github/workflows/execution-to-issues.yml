@@ -46,8 +46,12 @@ jobs:
 
       - name: Create GitHub Issues
         run: |
+          PLAN_FILE=$(echo "$EXEC_FILE" | sed 's|docs/execution-plans/|docs/plans/|' | sed 's|EXECUTION_PLAN.md|PLAN.md|')
+          PLAN_ARG=""
+          [ -f "$PLAN_FILE" ] && PLAN_ARG="--plan-file $PLAN_FILE"
           uv run --project .claude/scripts python .claude/scripts/parse_plan_to_issues.py \
             --execution-plan-file "$EXEC_FILE" \
+            $PLAN_ARG \
             --repo "${{ github.repository }}"
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

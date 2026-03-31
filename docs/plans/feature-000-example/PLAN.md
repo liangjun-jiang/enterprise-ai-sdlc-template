@@ -1,3 +1,15 @@
+---
+author: Jane Smith
+approver: ""
+feature: feature-000-example
+priority: medium
+assignees:
+  planning: Jane Smith
+  development: ""
+  review: Alex Chen
+  qa: ""
+---
+
 # Feature Plan: Add /version Endpoint
 
 ## Summary

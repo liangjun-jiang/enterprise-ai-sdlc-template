@@ -1,5 +1,8 @@
 # Execution Plan: Add /version Endpoint
 
+**Author:** Jane Smith
+**Approver:** *(pending — fill in when execution plan PR is merged)*
+
 ## Summary
 
 This plan implements a `GET /api/v1/version` endpoint on the FastAPI backend and surfaces the returned data in the React frontend. The work is split into three tasks: the backend model + endpoint, the backend router wiring + tests, and the frontend display component. Tasks 2 and 3 both depend on Task 1.
@@ -14,6 +17,7 @@ This plan implements a `GET /api/v1/version` endpoint on the FastAPI backend and
 
 **ID:** TASK-001
 **Depends on:** none
+**Assignee:** *(unset — will be handled by AI code writer)*
 **Affected files:**
 - `backend/app/models/version.py` (create)
 - `backend/app/routers/__init__.py` (create)
@@ -43,6 +47,7 @@ Create the `VersionResponse` Pydantic model and a FastAPI `APIRouter` with a sin
 
 **ID:** TASK-002
 **Depends on:** TASK-001
+**Assignee:** *(unset — will be handled by AI code writer)*
 **Affected files:**
 - `backend/app/main.py` (modify)
 - `backend/app/test_version.py` (create)
@@ -70,6 +75,7 @@ Wire the version router into the FastAPI app and write pytest tests covering the
 
 **ID:** TASK-003
 **Depends on:** TASK-001
+**Assignee:** *(unset — will be handled by AI code writer)*
 **Affected files:**
 - `frontend/src/App.tsx` (modify)
 - `frontend/src/App.test.tsx` (modify)
