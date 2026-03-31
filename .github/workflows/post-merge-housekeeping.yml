@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   housekeeping:
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'ai-generated')
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
