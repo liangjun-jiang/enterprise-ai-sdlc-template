@@ -14,9 +14,10 @@ build/
 node_modules/
 dist/
 
-# Env files
+# Env files (ignore real creds, but track the example template)
 .env
-.env.*
+.env.local
+.env.*.local
 
 # OS
 .DS_Store
