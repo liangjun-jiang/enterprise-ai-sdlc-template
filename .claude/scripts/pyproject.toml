@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "AI pipeline scripts for enterprise-ai-sdlc-template"
 requires-python = ">=3.12"
 dependencies = [
-    "anthropic>=0.40.0",
+    "anthropic[bedrock]>=0.40.0",
     "PyGithub>=2.5.0",
     "PyYAML>=6.0.2",
 ]

@@ -41,10 +41,24 @@ from _shared import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate code for a GitHub Issue using Claude Sonnet.")
-    parser.add_argument("--issue-number", type=int, required=True)
-    parser.add_argument("--repo", required=True, help="owner/repo-name")
+    parser.add_argument("--issue-number", type=int, help="GitHub issue number (required unless --dry-run)")
+    parser.add_argument("--repo", help="owner/repo-name (required unless --dry-run)")
     parser.add_argument("--context-dir", required=True)
-    return parser.parse_args()
+    # Dry-run mode: skip all GitHub operations, accept issue inline for local LLM testing
+    parser.add_argument("--dry-run", action="store_true", help="Skip GitHub; print LLM response to stdout")
+    parser.add_argument("--issue-title", default="Add health check endpoint", help="Issue title (dry-run only)")
+    parser.add_argument(
+        "--issue-body",
+        default=(
+            "Implement a GET /health endpoint that returns {\"status\": \"ok\"}.\n\n"
+            "Affected files:\n- `backend/app/main.py` (modify)"
+        ),
+        help="Issue body text (dry-run only)",
+    )
+    args = parser.parse_args()
+    if not args.dry_run and (not args.issue_number or not args.repo):
+        parser.error("--issue-number and --repo are required unless --dry-run is set")
+    return args
 
 
 def extract_affected_files(issue_body: str) -> list[str]:
@@ -160,26 +174,32 @@ def main() -> None:
     config = load_pipeline_config(repo_root)
     check_circuit_breaker(config)
 
-    gh = github_client()
-    repo = get_repo(gh, args.repo)
-    issue = repo.get_issue(args.issue_number)
-
-    print(f"[info] Processing issue #{args.issue_number}: {issue.title}")
-
     context_dir = Path(args.context_dir)
     system_prompt = load_system_prompt(context_dir, "SYSTEM_PROMPT_CODER.md")
     model = config["models"]["coder"]
     max_context = config["token_budget"]["max_context_tokens"]
     max_output = config["token_budget"]["max_output_tokens"]
 
-    affected_files = extract_affected_files(issue.body or "")
+    if args.dry_run:
+        issue_title = args.issue_title
+        issue_body = args.issue_body
+        print(f"[dry-run] Using inline issue: {issue_title!r}")
+    else:
+        gh = github_client()
+        repo = get_repo(gh, args.repo)
+        issue = repo.get_issue(args.issue_number)
+        issue_title = issue.title
+        issue_body = issue.body or ""
+        print(f"[info] Processing issue #{args.issue_number}: {issue_title}")
+
+    affected_files = extract_affected_files(issue_body)
     print(f"[info] Affected files: {affected_files}")
 
     context_docs = load_context_docs(context_dir, affected_paths=affected_files)
 
     user_message = build_user_message(
-        issue_title=issue.title,
-        issue_body=issue.body or "",
+        issue_title=issue_title,
+        issue_body=issue_body,
         affected_files=affected_files,
         repo_root=repo_root,
         context_docs=context_docs,
@@ -194,6 +214,12 @@ def main() -> None:
         user=user_message,
         max_tokens=max_output,
     )
+
+    if args.dry_run:
+        print("\n[dry-run] === LLM RESPONSE ===")
+        print(raw_response)
+        print("[dry-run] === END ===")
+        return
 
     result = parse_code_response(raw_response)
     branch_name: str = result["branch_name"]

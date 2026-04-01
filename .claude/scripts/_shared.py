@@ -130,30 +130,62 @@ def get_repo(gh: Github, repo_name: str) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Claude client
+# Claude client — supports direct Anthropic API and AWS Bedrock
+#
+# Set LLM_PROVIDER=bedrock to use AWS Bedrock.
+# Bedrock uses standard AWS credential env vars:
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN (optional),
+#   AWS_DEFAULT_REGION (default: us-east-1)
+#
+# Model IDs in AI_PIPELINE_CONFIG.json should use Bedrock format:
+#   anthropic.claude-opus-4-6, anthropic.claude-sonnet-4-6
+# When using direct Anthropic API the "anthropic." prefix is stripped automatically.
 # ---------------------------------------------------------------------------
 
-def anthropic_client() -> anthropic.Anthropic:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        die("ANTHROPIC_API_KEY environment variable is required")
-    base_url = os.environ.get("ANTHROPIC_BASE_URL")
-    kwargs: dict[str, str] = {"api_key": api_key}
-    if base_url:
-        kwargs["base_url"] = base_url
-    return anthropic.Anthropic(**kwargs)  # type: ignore[arg-type]
+def _is_bedrock() -> bool:
+    return os.environ.get("LLM_PROVIDER", "").lower() == "bedrock"
+
+
+def anthropic_client() -> anthropic.Anthropic | anthropic.AnthropicBedrock:
+    if _is_bedrock():
+        region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+        print(f"[info] Using AWS Bedrock (region: {region})", flush=True)
+        return anthropic.AnthropicBedrock(aws_region=region)
+    else:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            die("ANTHROPIC_API_KEY environment variable is required (or set LLM_PROVIDER=bedrock for AWS Bedrock)")
+        base_url = os.environ.get("ANTHROPIC_BASE_URL")
+        kwargs: dict[str, str] = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        return anthropic.Anthropic(**kwargs)  # type: ignore[arg-type]
+
+
+def normalize_model_id(model: str) -> str:
+    """Strip the 'anthropic.' prefix when using direct Anthropic API.
+
+    Bedrock model IDs use 'anthropic.claude-*' format.
+    Direct Anthropic API uses 'claude-*' format.
+    Config stores Bedrock format; this function normalizes for direct API calls.
+    """
+    if not _is_bedrock() and model.startswith("anthropic."):
+        return model[len("anthropic."):]
+    return model
 
 
 def call_claude(
-    client: anthropic.Anthropic,
+    client: anthropic.Anthropic | anthropic.AnthropicBedrock,
     model: str,
     system: str,
     user: str,
     max_tokens: int = 8192,
 ) -> str:
     """Call Claude and return the text of the first content block."""
+    resolved_model = normalize_model_id(model)
+    print(f"[info] Model: {resolved_model}", flush=True)
     response = client.messages.create(
-        model=model,
+        model=resolved_model,
         max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user}],
