@@ -167,13 +167,18 @@ def anthropic_client() -> anthropic.Anthropic | anthropic.AnthropicBedrock:
 
 
 def normalize_model_id(model: str) -> str:
-    """Strip the 'anthropic.' prefix when using direct Anthropic API.
+    """Resolve the model ID for the active provider.
 
-    Bedrock model IDs use 'anthropic.claude-*' format.
-    Direct Anthropic API uses 'claude-*' format.
-    Config stores Bedrock format; this function normalizes for direct API calls.
+    Config stores Bedrock-format IDs (e.g. 'anthropic.claude-sonnet-4-6').
+
+    - Bedrock (LLM_PROVIDER=bedrock): keep as-is
+    - LiteLLM gateway (ANTHROPIC_BASE_URL set): keep as-is — gateway is
+      deployed on Bedrock and expects Bedrock model IDs
+    - Direct Anthropic API: strip the 'anthropic.' prefix
     """
-    if not _is_bedrock() and model.startswith("anthropic."):
+    if _is_bedrock() or os.environ.get("ANTHROPIC_BASE_URL"):
+        return model
+    if model.startswith("anthropic."):
         return model[len("anthropic."):]
     return model
 

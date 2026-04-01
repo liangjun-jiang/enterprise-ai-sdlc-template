@@ -1,7 +1,7 @@
 {
   "circuit_breaker_active": false,
   "models": {
-    "planner": "anthropic.claude-opus-4-6",
+    "planner": "anthropic.claude-opus-4-6-v1",
     "coder": "anthropic.claude-sonnet-4-6",
     "reviewer": "anthropic.claude-sonnet-4-6",
     "issue_parser": "anthropic.claude-sonnet-4-6",
