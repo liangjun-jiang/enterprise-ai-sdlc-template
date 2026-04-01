@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -65,22 +66,29 @@ def extract_affected_files(issue_body: str) -> list[str]:
     """Parse affected file paths from the issue body (lines under 'Affected files:')."""
     paths: list[str] = []
     in_section = False
+    seen: set[str] = set()
     for line in issue_body.splitlines():
         if "affected files" in line.lower():
             in_section = True
             continue
         if in_section:
-            stripped = line.strip().lstrip("-").strip()
-            if stripped.startswith("`") and stripped.endswith("`"):
-                stripped = stripped[1:-1]
-            # Remove action annotation like " (create)" or " (modify)"
-            path_part = stripped.split("(")[0].strip()
-            if path_part and "/" in path_part:
-                paths.append(path_part)
-            elif stripped.startswith("#") or (stripped and not stripped.startswith("`")):
-                # Hit the next section or non-path line
-                if not stripped.startswith("-"):
-                    in_section = False
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("#") or (stripped.endswith(":") and not stripped.startswith("-")):
+                in_section = False
+                continue
+
+            content = stripped.lstrip("-").strip()
+            backtick_match = re.search(r"`([^`]+)`", content)
+            candidate = backtick_match.group(1).strip() if backtick_match else content
+            candidate = candidate.split("(")[0].strip()
+
+            # Accept nested and root-level paths (e.g., README.md).
+            if candidate and " " not in candidate and not candidate.startswith("#"):
+                if candidate not in seen:
+                    seen.add(candidate)
+                    paths.append(candidate)
     return paths
 
 
