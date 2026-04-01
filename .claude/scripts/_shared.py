@@ -148,7 +148,7 @@ def _is_bedrock() -> bool:
 
 def anthropic_client() -> anthropic.Anthropic | anthropic.AnthropicBedrock:
     if _is_bedrock():
-        region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+        region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
         print(f"[info] Using AWS Bedrock (region: {region})", flush=True)
         return anthropic.AnthropicBedrock(aws_region=region)
     else:

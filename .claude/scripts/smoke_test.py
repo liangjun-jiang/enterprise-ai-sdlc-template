@@ -10,7 +10,7 @@ Usage (direct Anthropic API):
     ANTHROPIC_API_KEY=sk-... python smoke_test.py
 
 Usage (AWS Bedrock):
-    LLM_PROVIDER=bedrock AWS_DEFAULT_REGION=us-east-1 python smoke_test.py
+    LLM_PROVIDER=bedrock AWS_DEFAULT_REGION=us-west-2 python smoke_test.py
 
 Usage (custom model / prompt):
     ANTHROPIC_API_KEY=sk-... python smoke_test.py \
