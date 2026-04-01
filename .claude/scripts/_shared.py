@@ -9,8 +9,12 @@ from pathlib import Path
 from typing import Any
 
 import anthropic
+from dotenv import load_dotenv
 from github import Auth, Github
 from github.GithubException import GithubException
+
+# Auto-load .env from the scripts directory if present (local dev convenience)
+load_dotenv(Path(__file__).parent / ".env")
 
 
 # ---------------------------------------------------------------------------
