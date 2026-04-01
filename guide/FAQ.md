@@ -92,6 +92,44 @@ Yes, via LiteLLM. Set `ANTHROPIC_BASE_URL` to your LiteLLM gateway URL and confi
 
 ---
 
+### Can I test the LLM scripts locally without GitHub Actions?
+
+Yes. Two ways:
+
+**1. Smoke test — verify connectivity only**
+
+Confirms your credentials and region are correct before running anything real:
+
+```bash
+cd .claude/scripts
+
+# Direct Anthropic API
+ANTHROPIC_API_KEY=sk-... uv run python smoke_test.py
+
+# AWS Bedrock
+LLM_PROVIDER=bedrock AWS_DEFAULT_REGION=us-west-2 uv run python smoke_test.py
+```
+
+A successful run prints the model's one-sentence reply and `OK — LLM connectivity confirmed.`
+
+**2. Dry-run — test the full code-writer prompt without touching GitHub**
+
+Runs the real prompt pipeline (context loading → LLM call → JSON response) but skips branch creation and PR opening. Prints the raw LLM output so you can inspect it:
+
+```bash
+ANTHROPIC_API_KEY=sk-... uv run python write_code.py \
+  --dry-run \
+  --context-dir ../../docs/context \
+  --issue-title "Add /version endpoint" \
+  --issue-body "Return app version. Affected files:\n- \`backend/app/main.py\` (modify)"
+```
+
+Swap in `LLM_PROVIDER=bedrock` instead of `ANTHROPIC_API_KEY` for Bedrock.
+
+The `--issue-title` / `--issue-body` defaults are a built-in sample task, so you can run `--dry-run --context-dir ../../docs/context` with no other flags and still get a meaningful response.
+
+---
+
 ## Bugs
 
 ### I filed a bug issue. Will AI fix it automatically?
