@@ -126,11 +126,16 @@ def commit_files_to_branch(
         abs_p.write_text(content)
         git(["add", rel])
 
-    email = author_name.lower().replace(" ", ".") + "@team.local"
-    env = {**os.environ, "GIT_AUTHOR_NAME": author_name, "GIT_AUTHOR_EMAIL": email,
-           "GIT_COMMITTER_NAME": author_name, "GIT_COMMITTER_EMAIL": email}
-    subprocess.run(["git", "commit", "-m", commit_msg], cwd=REPO_ROOT, env=env, check=True)
-    print(f"  {GREEN}✓ Committed to branch '{target_branch}'{R}")
+    # Check whether there is actually anything staged to commit
+    nothing_staged = git(["diff", "--cached", "--quiet"], check=False).returncode == 0
+    if nothing_staged:
+        print(f"  {DIM}(nothing new to commit on '{target_branch}' — files already up to date){R}")
+    else:
+        email = author_name.lower().replace(" ", ".") + "@team.local"
+        env = {**os.environ, "GIT_AUTHOR_NAME": author_name, "GIT_AUTHOR_EMAIL": email,
+               "GIT_COMMITTER_NAME": author_name, "GIT_COMMITTER_EMAIL": email}
+        subprocess.run(["git", "commit", "-m", commit_msg], cwd=REPO_ROOT, env=env, check=True)
+        print(f"  {GREEN}✓ Committed to branch '{target_branch}'{R}")
 
     git(["checkout", orig])
     if stashed:
@@ -156,6 +161,18 @@ def load_state() -> dict[str, Any]:
         except Exception:
             pass
     return {"completed": [], "data": {}}
+
+
+# ── Frontmatter helper ─────────────────────────────────────────────────────────
+
+def stamp_approver(content: str, approver_name: str) -> str:
+    """Replace the approvers list in YAML frontmatter with approver_name."""
+    return re.sub(
+        r'(approvers:\s*\n)((?:[ \t]+-[ \t]*[^\n]*\n)+)',
+        f'approvers:\n  - {approver_name}\n',
+        content,
+        count=1,
+    )
 
 
 def save_state(state: dict[str, Any]) -> None:
@@ -245,16 +262,19 @@ def step_roadmap(state: dict[str, Any]) -> None:
         print(f"  {DIM}[skip] roadmap already approved{R}")
         return
 
+    prd_stem = "prd-000-dashboard"
+    roadmap_filename = f"ROADMAP-for-{prd_stem}.md"
+    roadmap_path = REPO_ROOT / "docs" / "roadmap" / roadmap_filename
+
     header(f"STEP 3 — Roadmap  [{ROLES['project_manager']}]")
-    roadmap_path = REPO_ROOT / "docs" / "roadmap" / "ROADMAP.md"
 
     if roadmap_path.exists():
-        print(f"  {YELLOW}ROADMAP.md already exists — using existing file (skip LLM call).{R}")
-        print(f"  To regenerate, delete docs/roadmap/ROADMAP.md and re-run.")
+        print(f"  {YELLOW}{roadmap_filename} already exists — using existing file (skip LLM call).{R}")
+        print(f"  To regenerate, delete docs/roadmap/{roadmap_filename} and re-run.")
     else:
-        print("  Generating ROADMAP.md from prd-000-dashboard.md ...")
+        print(f"  Generating {roadmap_filename} from {prd_stem}.md ...")
         if not run_script("prd_to_roadmap.py", [
-            "--prd-file", "docs/prd/prd-000-dashboard.md",
+            "--prd-file", f"docs/prd/{prd_stem}.md",
             "--context-dir", "docs/context",
             "--local",
         ]):
@@ -262,17 +282,23 @@ def step_roadmap(state: dict[str, Any]) -> None:
             sys.exit(1)
 
     show_file(roadmap_path)
-    if not gate("project_manager", "docs/roadmap/ROADMAP.md"):
+    if not gate("project_manager", f"docs/roadmap/{roadmap_filename}"):
         print(f"{RED}  Roadmap rejected — stopping.{R}")
         sys.exit(0)
 
+    # Stamp approver name into frontmatter
+    approved_content = stamp_approver(roadmap_path.read_text(), ROLES["project_manager"])
+    roadmap_path.write_text(approved_content)
+    print(f"  {GREEN}✓ Stamped approver: {ROLES['project_manager']}{R}")
+
     commit_files_to_branch(
         "roadmap",
-        {"docs/roadmap/ROADMAP.md": roadmap_path.read_text()},
-        "feat: AI-generated ROADMAP.md from prd-000-dashboard",
+        {f"docs/roadmap/{roadmap_filename}": approved_content},
+        f"feat: AI-generated {roadmap_filename} (approved by {ROLES['project_manager']})",
         ROLES["project_manager"],
     )
     state["completed"].append("roadmap")
+    state["data"]["roadmap_file"] = f"docs/roadmap/{roadmap_filename}"
     save_state(state)
 
 
@@ -312,10 +338,18 @@ def step_milestones(state: dict[str, Any]) -> None:
         print(f"{RED}  Milestones rejected — stopping.{R}")
         sys.exit(0)
 
+    # Stamp approver into each milestone's frontmatter
+    stamped: dict[str, str] = {}
+    for f in existing:
+        content = stamp_approver(f.read_text(), ROLES["project_manager"])
+        f.write_text(content)
+        stamped[f"docs/milestones/{f.name}"] = content
+    print(f"  {GREEN}✓ Stamped approver: {ROLES['project_manager']}{R}")
+
     commit_files_to_branch(
         "milestone",
-        {f"docs/milestones/{f.name}": f.read_text() for f in existing},
-        f"feat: AI-generated {len(existing)} milestone(s)",
+        stamped,
+        f"feat: AI-generated {len(existing)} milestone(s) (approved by {ROLES['project_manager']})",
         ROLES["project_manager"],
     )
     state["completed"].append("milestones")
@@ -360,10 +394,18 @@ def step_plans(state: dict[str, Any]) -> None:
         print(f"{RED}  Plans rejected — stopping.{R}")
         sys.exit(0)
 
+    # Stamp approver into each plan's frontmatter
+    stamped = {}
+    for f in existing:
+        content = stamp_approver(f.read_text(), ROLES["tech_lead"])
+        f.write_text(content)
+        stamped[f"docs/plans/{f.name}"] = content
+    print(f"  {GREEN}✓ Stamped approver: {ROLES['tech_lead']}{R}")
+
     commit_files_to_branch(
         "plan",
-        {f"docs/plans/{f.name}": f.read_text() for f in existing},
-        f"feat: AI-generated {len(existing)} feature plan(s)",
+        stamped,
+        f"feat: AI-generated {len(existing)} feature plan(s) (approved by {ROLES['tech_lead']})",
         ROLES["tech_lead"],
     )
     state["completed"].append("plans")

@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [closed]
     branches: [roadmap]
-    paths: ["docs/roadmap/ROADMAP.md"]
+    paths: ["docs/roadmap/ROADMAP-for-*.md"]
 
 permissions:
   contents: write
@@ -23,6 +23,15 @@ jobs:
 
       - uses: jdx/mise-action@v2
 
+      - name: Detect roadmap file
+        run: |
+          ROADMAP_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^docs/roadmap/ROADMAP-for-" | head -1)
+          if [ -z "$ROADMAP_FILE" ]; then
+            echo "::error::No ROADMAP-for-*.md found in merged changes."
+            exit 1
+          fi
+          echo "ROADMAP_FILE=$ROADMAP_FILE" >> "$GITHUB_ENV"
+
       - name: Check circuit breaker
         run: |
           ACTIVE=$(python3 -c "import json; c=json.load(open('docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
@@ -38,7 +47,7 @@ jobs:
       - name: Generate milestones
         run: |
           uv run --project .claude/scripts python .claude/scripts/roadmap_to_milestones.py \
-            --roadmap-file docs/roadmap/ROADMAP.md \
+            --roadmap-file "$ROADMAP_FILE" \
             --repo "${{ github.repository }}" \
             --context-dir docs/context
         env:

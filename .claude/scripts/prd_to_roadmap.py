@@ -116,6 +116,7 @@ def build_user_message(prd_content: str, context_docs: str, prd_path: str, exist
 def create_roadmap_pr(
     repo_name: str,
     prd_stem: str,
+    roadmap_filename: str,
     roadmap_content: str,
     config: dict,  # type: ignore[type-arg]
 ) -> None:
@@ -127,7 +128,7 @@ def create_roadmap_pr(
 
     repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=base_sha)
 
-    file_path = "docs/roadmap/ROADMAP.md"
+    file_path = f"docs/roadmap/{roadmap_filename}"
     try:
         existing = repo.get_contents(file_path, ref=branch_name)
         repo.update_file(
@@ -218,14 +219,16 @@ def main() -> None:
     if not roadmap_content:
         die("Claude response missing 'roadmap_content' key")
 
+    roadmap_filename = f"ROADMAP-for-{prd_path.stem}.md"
+
     if args.local:
-        out_path = repo_root / "docs" / "roadmap" / "ROADMAP.md"
+        out_path = repo_root / "docs" / "roadmap" / roadmap_filename
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(roadmap_content)
         print(f"[local] Written {out_path}")
         return
 
-    create_roadmap_pr(args.repo, prd_path.stem, roadmap_content, config)
+    create_roadmap_pr(args.repo, prd_path.stem, roadmap_filename, roadmap_content, config)
 
 
 if __name__ == "__main__":
