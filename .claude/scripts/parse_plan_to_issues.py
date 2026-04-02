@@ -112,7 +112,8 @@ def create_github_issues(
             repo.create_label(name=label_name, color=color)
 
     # Attribution from frontmatter
-    author = frontmatter.get("author", "")
+    raw_authors = frontmatter.get("authors", [])
+    author = ", ".join(str(a) for a in raw_authors if a)
     feature = frontmatter.get("feature", "")
     fm_assignees: dict[str, str] = frontmatter.get("assignees", {}) or {}
     default_dev_assignee = fm_assignees.get("development", "")
@@ -178,7 +179,7 @@ def main() -> None:
 
     frontmatter = read_plan_frontmatter(args.plan_file)
     if frontmatter:
-        print(f"[info] Plan author: {frontmatter.get('author', '(unknown)')}")
+        print(f"[info] Plan authors: {frontmatter.get('authors', '(unknown)')}")
 
     created = create_github_issues(args.repo, issues, config, frontmatter)
     print(f"[info] Done. Created issues: {created}")

@@ -1,7 +1,7 @@
 # Execution Plan: Add /version Endpoint
 
-**Author:** Jane Smith
-**Approver:** *(pending — fill in when execution plan PR is merged)*
+**Authors:** Jane Smith
+**Approvers:** *(pending — fill in when execution plan PR is merged)*
 
 ## Summary
 

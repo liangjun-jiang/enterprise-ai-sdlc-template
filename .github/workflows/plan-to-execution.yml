@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [closed]
     branches: [plan]
-    paths: ["docs/plans/**"]
+    paths: ["docs/plans/PLAN-*.md"]
 
 permissions:
   contents: write
@@ -25,13 +25,13 @@ jobs:
 
       - name: Validate input
         run: |
-          PLAN_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^docs/plans/" | grep "PLAN.md" | head -1)
+          PLAN_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^docs/plans/PLAN-" | head -1)
           if [ -z "$PLAN_FILE" ]; then
-            echo "::error::No PLAN.md found in merged changes under docs/plans/"
+            echo "::error::No PLAN-NNN-*.md found in merged changes under docs/plans/"
             exit 1
           fi
           echo "PLAN_FILE=$PLAN_FILE" >> "$GITHUB_ENV"
-          FEATURE_SLUG=$(echo "$PLAN_FILE" | sed 's|docs/plans/||' | sed 's|/PLAN.md||')
+          FEATURE_SLUG=$(basename "$PLAN_FILE" .md | sed 's/^PLAN-[0-9]*-//')
           echo "FEATURE_SLUG=$FEATURE_SLUG" >> "$GITHUB_ENV"
           echo "OUTPUT_FILE=docs/execution-plans/$FEATURE_SLUG/EXECUTION_PLAN.md" >> "$GITHUB_ENV"
 

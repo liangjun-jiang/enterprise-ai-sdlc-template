@@ -223,3 +223,22 @@ def find_repo_root() -> Path:
             return parent
     die("Could not find repo root (no .git directory found)")
     return Path()  # unreachable, satisfies mypy
+
+
+def list_git_tracked_files(repo_root: Path, path: str) -> list[str]:
+    """Return repo-relative paths of all git-tracked files under the given path.
+
+    Uses `git ls-files` so only committed/staged files are returned —
+    not untracked local artifacts. Falls back to an empty list if git
+    is unavailable or the path does not exist.
+    """
+    import subprocess
+    result = subprocess.run(
+        ["git", "ls-files", path],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return []
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]

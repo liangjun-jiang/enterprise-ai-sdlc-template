@@ -7,9 +7,9 @@ produce a structured Execution Plan (EXECUTION_PLAN.md).
 
 Usage:
     python generate_execution_plan.py \\
-        --plan-file docs/plans/feature-000-example/PLAN.md \\
+        --plan-file docs/plans/PLAN-000-feature-example.md \\
         --context-dir docs/context \\
-        --output-file docs/execution-plans/feature-000-example/EXECUTION_PLAN.md
+        --output-file docs/execution-plans/feature-example/EXECUTION_PLAN.md
 """
 
 from __future__ import annotations

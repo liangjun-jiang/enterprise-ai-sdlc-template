@@ -63,9 +63,11 @@ Push to `main` once — `init-branches.yml` automatically creates all required b
 |--------|---------|
 | `main` | Production-ready code |
 | `dev` | Integration branch — all code PRs target this |
-| `plan` | Accepts Feature Plan PRs, triggers execution plan generation |
-| `plan-execution` | Holds AI-generated Execution Plan PRs for human review |
-| `roadmap` | Accepts milestone files, triggers Feature Plan generation |
+| `prd` | Product Requirements Documents |
+| `roadmap` | AI-generated `ROADMAP.md` |
+| `milestone` | AI-generated `milestone-*.md` files |
+| `plan` | AI-generated `PLAN-NNN-*.md` feature plans |
+| `plan-execution` | AI-generated `EXECUTION_PLAN.md` files |
 
 ### 3c. Branch protection rules
 
@@ -132,7 +134,7 @@ git push origin main
 ```bash
 git checkout plan
 git checkout -b feat/feature-000-example
-# docs/plans/feature-000-example/PLAN.md already exists in the repo
+# docs/plans/PLAN-000-feature-example.md already exists in the repo
 git push origin feat/feature-000-example
 ```
 Open a PR from `feat/feature-000-example` → `plan` and merge it.
@@ -182,6 +184,7 @@ Repeat Steps 5–6 for TASK-002 and TASK-003.
 | [`guide/TOKEN_COST_CONSCIOUSNESS.md`](guide/TOKEN_COST_CONSCIOUSNESS.md) | How context size is managed |
 | [`docs/context/`](docs/context/) | AI context layer — architecture, standards, prompts |
 | [`docs/prd/`](docs/prd/) | Product Requirements Documents |
-| [`docs/roadmap/`](docs/roadmap/) | Milestones |
-| [`docs/plans/`](docs/plans/) | Feature Plans |
+| [`docs/roadmap/`](docs/roadmap/) | AI-generated roadmap (`ROADMAP.md`) |
+| [`docs/milestones/`](docs/milestones/) | AI-generated milestone files |
+| [`docs/plans/`](docs/plans/) | Feature plans (`PLAN-NNN-*.md`) |
 | [`docs/execution-plans/`](docs/execution-plans/) | AI-generated task breakdowns |

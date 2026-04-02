@@ -55,7 +55,7 @@ If the Feature Plan is missing critical information (e.g., does not specify the 
 
 ## Context You Will Receive
 
-- The Feature Plan (`PLAN.md`) — includes YAML frontmatter with `author`, `approver`, `milestone`, `prd_ref`, and `assignees`
+- The Feature Plan (`PLAN.md`) — includes YAML frontmatter with `authors`, `approvers`, `milestone`, `prd_ref`, and `assignees`
 - *(Optional)* The referenced PRD — provides business purpose, target users, and success metrics
 - *(Optional)* The referenced Milestone — provides scope boundaries and what is deferred
 - `docs/context/ARCHITECTURE.md`
@@ -72,7 +72,7 @@ When PRD and Milestone context is provided, use it to:
 ## Attribution
 
 The Feature Plan frontmatter contains an `assignees` map. Carry it forward into the Execution Plan:
-- Add `**Author:**` and `**Approver:**` lines immediately after the `# Execution Plan:` heading
+- Add `**Authors:**` and `**Approvers:**` lines immediately after the `# Execution Plan:` heading, joining multiple values with `, `
 - For each task, add an `**Assignee:**` field using `assignees.development` from the frontmatter. If blank, write `*(unset — will be handled by AI code writer)*`
 
 This ensures every task in GitHub Issues is attributed to the right person for reporting.

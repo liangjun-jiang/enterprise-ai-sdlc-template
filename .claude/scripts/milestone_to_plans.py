@@ -8,7 +8,7 @@ Opens a PR to the plan branch with all generated plans.
 
 Usage:
     python milestone_to_plans.py \\
-        --milestone-file docs/roadmap/milestone-001-mvp-dashboard.md \\
+        --milestone-file docs/milestones/milestone-001-mvp.md \\
         --repo owner/repo-name \\
         --context-dir docs/context
 """
@@ -32,9 +32,9 @@ from _shared import (
     find_repo_root,
     get_repo,
     github_client,
+    list_git_tracked_files,
     load_context_docs,
     load_pipeline_config,
-    load_system_prompt,
 )
 
 MILESTONE_TO_PLANS_PROMPT = """\
@@ -43,17 +43,20 @@ You are a senior product engineer. You will be given:
 2. Optionally, the PRD the milestone belongs to
 3. Project context documents
 
-Your job is to generate one Feature Plan (PLAN.md) per feature listed in the milestone.
+Your job is to generate one Feature Plan per feature listed in the milestone.
 
 Output a JSON array where each element has:
+- "plan_number": string — zero-padded build order, e.g. "001" (sequence reflects suggested implementation order)
 - "feature_slug": string — kebab-case identifier, e.g. "github-api-client"
-- "plan_content": string — the full PLAN.md content (Markdown)
+- "plan_content": string — the full plan content (Markdown)
 
 Each plan must include YAML frontmatter:
 ```
 ---
-author: AI-generated
-approver: ""
+authors:
+  - AI-generated
+approvers:
+  - ""
 feature: <feature_slug>
 priority: medium
 milestone: <milestone id from frontmatter>
@@ -74,17 +77,24 @@ Followed by:
 - `## Out of Scope` — what this plan explicitly does not cover
 - `## Definition of Done` — bullet list of verifiable completion criteria
 
-Keep each plan focused on ONE feature. If a feature is too large, split it into two plans.
-Output ONLY the JSON array. No markdown fences, no explanation.
+Rules:
+- Number plans in suggested build order (dependencies first).
+- Keep each plan focused on ONE feature. If a feature is too large, split it into two plans.
+- Output ONLY the JSON array. No markdown fences, no explanation.
 """
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate Feature Plans from a milestone file.")
     parser.add_argument("--milestone-file", required=True)
-    parser.add_argument("--repo", required=True, help="owner/repo-name")
+    parser.add_argument("--repo", help="owner/repo-name (required unless --dry-run or --local)")
     parser.add_argument("--context-dir", required=True)
-    return parser.parse_args()
+    parser.add_argument("--dry-run", action="store_true", help="Skip GitHub; print raw LLM response to stdout")
+    parser.add_argument("--local", action="store_true", help="Skip GitHub; write output files to local disk")
+    args = parser.parse_args()
+    if not args.dry_run and not args.local and not args.repo:
+        parser.error("--repo is required unless --dry-run or --local is set")
+    return args
 
 
 def read_frontmatter(path: Path) -> dict[str, str]:
@@ -115,11 +125,19 @@ def build_user_message(
     milestone_content: str,
     prd_content: str,
     context_docs: str,
+    existing_slugs: list[str],
     max_context: int,
 ) -> str:
     parts = [f"## Milestone\n\n{milestone_content}"]
     if prd_content:
         parts.append(prd_content)
+    if existing_slugs:
+        slugs_list = "\n".join(f"- {s}" for s in existing_slugs)
+        parts.append(
+            f"## Already planned — do not generate plans for these features\n\n"
+            f"{slugs_list}\n\n"
+            f"If a milestone feature matches one of these slugs, skip it entirely."
+        )
     parts.append(f"## Project Context\n\n{context_docs}")
     return apply_token_budget("\n\n---\n\n".join(parts), max_context)
 
@@ -144,12 +162,13 @@ def create_plans_pr(
 
     for plan in plans:
         slug = plan["feature_slug"]
+        number = plan.get("plan_number", "000")
         content = plan["plan_content"]
-        file_path = f"docs/plans/{slug}/PLAN.md"
+        file_path = f"docs/plans/PLAN-{number}-{slug}.md"
         try:
             repo.create_file(
                 file_path,
-                f"feat: AI-generated plan for {slug}",
+                f"feat: AI-generated plan {number} for {slug}",
                 content,
                 branch=branch_name,
             )
@@ -157,13 +176,13 @@ def create_plans_pr(
         except Exception as e:
             print(f"[warn] Could not create {file_path}: {e}", file=sys.stderr)
 
-    feature_list = "\n".join(f"- `{p['feature_slug']}`" for p in plans)
+    feature_list = "\n".join(f"- `PLAN-{p.get('plan_number','000')}-{p['feature_slug']}.md`" for p in plans)
     pr = repo.create_pull(
         title=f"Feature Plans: {milestone_id} ({len(plans)} features)",
         body=(
             f"AI-generated Feature Plans for milestone `{milestone_id}`.\n\n"
-            f"**Plans included:**\n{feature_list}\n\n"
-            f"Review each `PLAN.md` and merge to trigger `plan-to-execution.yml`."
+            f"**Plans included (in suggested build order):**\n{feature_list}\n\n"
+            f"Review each plan file and merge to trigger `plan-to-execution.yml`."
         ),
         head=branch_name,
         base=plan_branch,
@@ -197,12 +216,22 @@ def main() -> None:
     prd_content = load_prd(prd_ref, repo_root)
     context_dir = Path(args.context_dir)
     context_docs = load_context_docs(context_dir)
-    system_prompt = load_system_prompt(context_dir, "SYSTEM_PROMPT_PLANNER.md")
+    system_prompt = MILESTONE_TO_PLANS_PROMPT
+
+    existing_plan_files = list_git_tracked_files(repo_root, "docs/plans")
+    import re as _re
+    existing_slugs = [
+        m.group(1)
+        for f in existing_plan_files
+        if (m := _re.match(r"docs/plans/PLAN-\d+-(.+)\.md", f))
+    ]
+    if existing_slugs:
+        print(f"[info] Existing plans (will skip): {existing_slugs}")
     model = config["models"]["planner"]
     max_context = config["token_budget"]["max_context_tokens"]
     max_output = config["token_budget"]["max_output_tokens"]
 
-    user_message = build_user_message(milestone_content, prd_content, context_docs, max_context)
+    user_message = build_user_message(milestone_content, prd_content, context_docs, existing_slugs, max_context)
 
     print(f"[info] Calling {model} to generate plans for milestone {milestone_id!r}...", flush=True)
     raw = call_claude(
@@ -213,6 +242,12 @@ def main() -> None:
         max_tokens=max_output,
     )
 
+    if args.dry_run:
+        print("\n[dry-run] === LLM RESPONSE ===")
+        print(raw)
+        print("[dry-run] === END ===")
+        return
+
     text = raw.strip()
     if text.startswith("```"):
         lines = text.splitlines()
@@ -221,9 +256,21 @@ def main() -> None:
     try:
         plans: list[dict[str, str]] = json.loads(text)
     except json.JSONDecodeError as e:
-        die(f"Claude returned invalid JSON: {e}\n\nRaw:\n{raw[:500]}")
+        die(f"Claude returned invalid JSON: {e}\n\nRaw:\\n{raw[:500]}")
 
     print(f"[info] Generated {len(plans)} plan(s)")
+
+    if args.local:
+        out_dir = repo_root / "docs" / "plans"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for plan in plans:
+            number = plan.get("plan_number", "000")
+            slug = plan["feature_slug"]
+            out_path = out_dir / f"PLAN-{number}-{slug}.md"
+            out_path.write_text(plan["plan_content"])
+            print(f"[local] Written {out_path}")
+        return
+
     create_plans_pr(args.repo, milestone_id, plans, config, repo_root)
 
 

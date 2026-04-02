@@ -12,7 +12,7 @@ docs/context/                   @tech-lead
 docs/schemas/                   @tech-lead
 
 # --- PRDs ---
-# Product Owner owns all product requirement documents.
+# Product Owner owns all product requirement documents (live on prd branch).
 docs/prd/                       @product-owner
 
 # --- Roadmap / milestones ---

@@ -6,8 +6,8 @@ Terms specific to this project's AI-assisted SDLC pipeline.
 
 ## Pipeline Concepts
 
-**Feature Plan (`PLAN.md`)**
-A human-authored Markdown document describing a feature to be built. Written in plain language. Lives in `docs/plans/<feature-slug>/PLAN.md`. This is the only artifact humans author in the AI pipeline — everything downstream is AI-generated.
+**Feature Plan**
+A Markdown document describing a feature to be built. AI-generated from a milestone file, or human-authored for ad-hoc work. Lives in `docs/plans/PLAN-NNN-<slug>.md`. The number reflects suggested build order.
 
 **Execution Plan (`EXECUTION_PLAN.md`)**
 An AI-generated Markdown document (produced by `generate_execution_plan.py` using Claude Opus) that breaks a Feature Plan into an ordered list of tasks. Each task has: title, description, acceptance criteria, affected files, and dependencies. Validated against `docs/schemas/execution-plan-schema.yaml`.

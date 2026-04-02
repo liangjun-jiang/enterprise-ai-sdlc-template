@@ -14,17 +14,18 @@ Your primary artifacts are the **PRD** (`docs/prd/`) and approved **Feature Plan
 - If an Execution Plan looks wrong (wrong scope, missing a requirement), comment and request changes — don't merge until it reflects your intent
 
 **During the day**
-- When you have a new initiative, create `docs/prd/prd-NNN-title.md` — PRDs are always human-authored
-- Work with the Project Manager to create a milestone file in `docs/roadmap/` referencing your PRD
-- When a milestone PR merges to the `roadmap` branch, `milestone-to-plans.yml` fires automatically and generates Feature Plans for review
-- For ad-hoc work with no milestone backing it, create `docs/plans/<feature-slug>/PLAN.md` directly and set `milestone: ad-hoc`
-- All plan files include YAML frontmatter with your name as `author`, proposed `assignees`, and a `prd_ref` if applicable
+- When you have a new initiative, create a branch named `prod-NN-proposal` (e.g. `prod-01-dashboard`) and write `docs/prd/prd-NNN-title.md` — PRDs are always human-authored
+- Open a PR from `prod-NN-proposal` → `prd` — merging it triggers `prd-to-roadmap.yml` automatically
+- For ad-hoc work with no milestone backing it, create `docs/plans/PLAN-NNN-<slug>.md` directly and set `milestone: ad-hoc`
+- All plan files include YAML frontmatter with your name in `authors`, proposed `assignees`, and a `prd_ref` if applicable
 
 **PLAN.md frontmatter format:**
 ```yaml
 ---
-author: Jane Smith
-approver: ""
+authors:
+  - Jane Smith
+approvers:
+  - ""
 feature: feature-slug
 priority: medium
 milestone: milestone-001
@@ -54,9 +55,9 @@ Your job is **flow**. You keep tasks moving from the plan stage through to merge
 - Review any overnight workflow failures (Actions tab) — failed runs post comments on the relevant issue/PR
 
 **During the day**
-- When the Product Owner has a new PRD, work with them to create the milestone file in `docs/roadmap/`
-- Open a PR for the milestone file to the `roadmap` branch — merging it triggers automatic Feature Plan generation
-- When an Execution Plan PR is opened, coordinate with the Tech Lead to review it
+- Once a PRD is merged to `prd`, `prd-to-roadmap.yml` generates a roadmap PR automatically — review and merge it
+- Once the roadmap is merged to `roadmap`, `roadmap-to-milestones.yml` generates milestone files — review and merge the PR to `milestone`
+- When an Execution Plan PR is opened on `plan-execution`, coordinate with the Tech Lead to review it
 - Merge approved Execution Plans → issues are created automatically with assignees from the frontmatter
 - Label tasks `ready-for-ai-coding` once they're unblocked and prioritized
 - Track `assignees` in `PLAN.md` frontmatter — this is the source of truth for who owns each stage
@@ -64,7 +65,7 @@ Your job is **flow**. You keep tasks moving from the plan stage through to merge
 **Reporting**
 GitHub gives you the raw data: issue creation timestamps, PR open/merge times, assignees, label history, and commit authors. To aggregate this into a report:
 - Use the GitHub API (`/repos/{owner}/{repo}/issues`, `/pulls`) filtered by label, assignee, or date range
-- Each `PLAN.md` frontmatter has `author`, `approver`, and `assignees` — the scripts propagate these into issue metadata
+- Each `PLAN.md` frontmatter has `authors`, `approvers`, and `assignees` — the scripts propagate these into issue metadata
 - The full audit trail (who wrote the plan, who approved it, who wrote the code, who reviewed it) is in GitHub history
 
 **End of day**

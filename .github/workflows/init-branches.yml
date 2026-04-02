@@ -22,7 +22,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          for BRANCH in dev plan plan-execution roadmap; do
+          for BRANCH in prd roadmap milestone plan plan-execution dev; do
             if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
               echo "[info] Branch '$BRANCH' already exists — skipping"
             else

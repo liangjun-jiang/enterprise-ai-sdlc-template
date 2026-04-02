@@ -1,10 +1,10 @@
-name: Milestone → Feature Plans
+name: Roadmap → Milestones
 
 on:
   pull_request:
     types: [closed]
-    branches: [milestone]
-    paths: ["docs/milestones/milestone-*.md"]
+    branches: [roadmap]
+    paths: ["docs/roadmap/ROADMAP.md"]
 
 permissions:
   contents: write
@@ -12,25 +12,16 @@ permissions:
   issues: write
 
 jobs:
-  generate-plans:
+  generate-milestones:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: milestone
+          ref: roadmap
           fetch-depth: 0
 
       - uses: jdx/mise-action@v2
-
-      - name: Validate input
-        run: |
-          MILESTONE_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^docs/milestones/milestone-" | head -1)
-          if [ -z "$MILESTONE_FILE" ]; then
-            echo "::error::No milestone file found in merged changes."
-            exit 1
-          fi
-          echo "MILESTONE_FILE=$MILESTONE_FILE" >> "$GITHUB_ENV"
 
       - name: Check circuit breaker
         run: |
@@ -44,15 +35,21 @@ jobs:
         run: uv sync --frozen
         working-directory: .claude/scripts
 
-      - name: Generate feature plans
+      - name: Generate milestones
         run: |
-          uv run --project .claude/scripts python .claude/scripts/milestone_to_plans.py \
-            --milestone-file "$MILESTONE_FILE" \
+          uv run --project .claude/scripts python .claude/scripts/roadmap_to_milestones.py \
+            --roadmap-file docs/roadmap/ROADMAP.md \
             --repo "${{ github.repository }}" \
             --context-dir docs/context
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_BEDROCK_ENDPOINT_URL: ${{ secrets.AWS_BEDROCK_ENDPOINT_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Comment on failure
@@ -64,5 +61,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: '❌ `milestone-to-plans` workflow failed. Check the [Actions run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
+              body: '❌ `roadmap-to-milestones` workflow failed. Check the [Actions run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
             });

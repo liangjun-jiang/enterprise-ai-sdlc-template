@@ -1,6 +1,87 @@
 # FAQ
 
-## Code Changes
+## Branches
+
+### What is each branch for?
+
+| Branch | Holds | PR merge triggers |
+|--------|-------|-------------------|
+| `prd` | PRDs | `prd-to-roadmap.yml` → PR to `roadmap` |
+| `roadmap` | `ROADMAP.md` | `roadmap-to-milestones.yml` → PR to `milestone` |
+| `milestone` | `milestone-*.md` files | `milestone-to-plans.yml` → PR to `plan` |
+| `plan` | `PLAN-NNN-*.md` feature plans | `plan-to-execution.yml` → PR to `plan-execution` |
+| `plan-execution` | `EXECUTION_PLAN.md` files | `execution-to-issues.yml` → GitHub Issues |
+| `dev` | All code | `post-merge-housekeeping.yml` → context docs updated |
+| `main` | Production-ready code | — |
+
+See [`GIT_BRANCHES_FLOW.md`](./GIT_BRANCHES_FLOW.md) for the full flow diagram, branch naming convention, human gates, and local testing steps.
+
+---
+
+### How does code get to main?
+
+The AI code writer opens PRs targeting `dev`. Once a human reviews, approves, and merges to `dev`, it goes through normal promotion:
+
+```
+feature branch → dev (AI + human review) → main (human approval)
+```
+
+`main` is production-only. Nothing merges to `main` automatically — a human PR from `dev` → `main` is always required.
+
+---
+
+### Why does the workflow only process the newly merged PRD, not all PRDs on the branch?
+
+Each workflow uses `git diff HEAD~1 HEAD` to extract the single file changed in the merged PR.
+Only that file is sent to the LLM.
+
+**Why:** if a branch has 10 PRDs and you add an 11th, reprocessing all 10 would regenerate
+plans and milestones that already exist — wasting tokens and creating duplicates.
+
+The AI still knows about existing work: scripts run `git ls-files` on downstream branches
+(roadmap, milestone, plan) to build a short deduplication list, so the LLM is told "these
+files already exist — skip them."
+
+**Result:** each merge is cheap and idempotent. Adding a 5th PRD costs the same tokens as
+adding the 1st.
+
+---
+
+## Planning
+
+### Do I have to follow the full PRD → Milestone → Plan → Execution Plan pipeline?
+
+No. The pipeline is modular — enter at whatever stage makes sense:
+
+| You have | Start here |
+|----------|-----------|
+| A PRD and want full structure | `prd_to_milestone.py` → full pipeline |
+| A milestone file already written | `milestone_to_plans.py` → onwards |
+| A feature idea, skip the formality | Write a `PLAN.md` directly → merge to `plan` branch |
+| A well-scoped task, skip planning entirely | Write a GitHub Issue → add `ready-for-ai-coding` |
+
+Most teams start somewhere in the middle. The earlier stages (PRD → milestone → plan) exist to keep larger projects structured, not as mandatory overhead for every change.
+
+---
+
+### What is the difference between a roadmap and a milestone?
+
+- **Roadmap** — the big-picture timeline: what gets built, in what order, across quarters
+- **Milestone** — a specific deliverable within the roadmap with a clear definition of done and a feature list
+
+```
+Roadmap
+  └─► Milestone 1 (MVP)       ← one milestone file
+        └─► Feature Plan A
+        └─► Feature Plan B
+  └─► Milestone 2 (Beta)
+        └─► Feature Plan C
+```
+
+In practice these terms get used loosely. What matters is that a milestone is concrete enough to break into feature plans.
+
+---
+
 
 ### Should I write an issue before making a code change?
 

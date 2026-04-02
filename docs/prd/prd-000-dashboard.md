@@ -2,7 +2,7 @@
 id: prd-000
 title: AI-SDLC Demo Dashboard
 status: draft
-owner: ""
+owner: "James Smith"
 ---
 
 # PRD: AI-SDLC Demo Dashboard
@@ -30,7 +30,7 @@ Teams adopting the AI-SDLC pipeline need a way to visualize progress across all 
 2. Hierarchy view: PRD → Milestone → Feature Plan → Task Issue
 3. Per-person activity summary: issues closed, PRs merged, reviews posted (this week / this month)
 4. AI pipeline metrics: plans generated, issues created by AI, AI PRs merged vs. rejected
-5. No separate database — GitHub is the source of truth
+5. For Phase 0, there is no separate database — GitHub is the source of truth. We will immplement the database & schemas later once we have enough data in Github. 
 
 ## Out of Scope
 
