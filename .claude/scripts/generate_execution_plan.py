@@ -71,8 +71,8 @@ def load_upstream_context(frontmatter: dict[str, str], repo_root: Path) -> str:
 
     milestone_id = frontmatter.get("milestone", "")
     if milestone_id and milestone_id != "ad-hoc":
-        roadmap_dir = repo_root / "docs" / "roadmap"
-        matches = list(roadmap_dir.glob(f"{milestone_id}*.md")) if roadmap_dir.exists() else []
+        milestones_dir = repo_root / "docs" / "milestones"
+        matches = list(milestones_dir.glob(f"{milestone_id}*.md")) if milestones_dir.exists() else []
         if matches:
             parts.append(f"## Milestone\n\n{matches[0].read_text()}")
             print(f"[info] Loaded milestone: {matches[0].name}")

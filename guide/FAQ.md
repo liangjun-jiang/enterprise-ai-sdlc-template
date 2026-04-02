@@ -175,9 +175,26 @@ Yes, via LiteLLM. Set `ANTHROPIC_BASE_URL` to your LiteLLM gateway URL and confi
 
 ### Can I test the LLM scripts locally without GitHub Actions?
 
-Yes. Two ways:
+Yes. Three ways:
 
-**1. Smoke test — verify connectivity only**
+**1. Full end-to-end simulation** (recommended for first-time setup)
+
+Walks the entire pipeline interactively — PRD → Roadmap → Milestones → Plans → Execution Plans → GitHub Issues. Pauses at each step for a named role to review and approve. Saves state so you can resume if interrupted.
+
+```bash
+# From repo root — requires .claude/scripts/.env with GITHUB_TOKEN + GITHUB_REPO
+uv run --project .claude/scripts python .claude/scripts/simulate_pipeline.py
+
+# Resume from a specific step (1=setup, 2=prd, 3=roadmap, ...)
+uv run --project .claude/scripts python .claude/scripts/simulate_pipeline.py --from-step 5
+
+# Reset saved state and start over
+uv run --project .claude/scripts python .claude/scripts/simulate_pipeline.py --reset
+```
+
+Files generated are already on disk (reuses them without an LLM call). Only missing files trigger the LLM.
+
+**2. Smoke test — verify LLM connectivity only**
 
 Confirms your credentials and region are correct before running anything real:
 
