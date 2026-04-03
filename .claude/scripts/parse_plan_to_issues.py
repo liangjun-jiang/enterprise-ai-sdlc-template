@@ -40,7 +40,7 @@ You are a precise JSON extractor. Given a Markdown Execution Plan, output a JSON
 Each object must have exactly these fields:
 - "title": string — the task title (imperative mood)
 - "body": string — full Markdown body including description, acceptance criteria, and affected files
-- "labels": ["ready-for-ai-coding"] for all tasks
+- "labels": [] (ignored by caller; keep as empty list)
 - "task_id": string — e.g. "TASK-001"
 - "depends_on": list of task_id strings this task depends on (empty list if none)
 - "assignee": string — the assignee name/username from the task's Assignee field, or "" if unset
@@ -103,11 +103,10 @@ def create_github_issues(
     gh = github_client()
     repo = get_repo(gh, repo_name)
     ai_label = config["labels"]["ai_generated"]
-    ready_label = config["labels"]["ready_for_coding"]
 
     # Ensure labels exist
     existing_labels = {lb.name for lb in repo.get_labels()}
-    for label_name, color in [(ai_label, "0075ca"), (ready_label, "e4e669")]:
+    for label_name, color in [(ai_label, "0075ca")]:
         if label_name not in existing_labels:
             repo.create_label(name=label_name, color=color)
 
@@ -145,7 +144,7 @@ def create_github_issues(
         create_kwargs: dict[str, Any] = {
             "title": issue_data["title"],
             "body": body,
-            "labels": [ready_label, ai_label],
+            "labels": [ai_label],
         }
         if assignee:
             create_kwargs["assignee"] = assignee
