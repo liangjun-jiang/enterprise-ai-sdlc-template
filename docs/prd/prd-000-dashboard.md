@@ -3,8 +3,11 @@ id: prd-000
 title: AI-SDLC Demo Dashboard
 status: draft
 owner: "James Smith"
----
+approvers:
+  - "James Smith"
 
+approved_at: "2026-04-03 09:11"
+---
 # PRD: AI-SDLC Demo Dashboard
 
 ## Problem Statement
