@@ -138,13 +138,13 @@ def get_repo(gh: Github, repo_name: str) -> Any:
 #
 # Set LLM_PROVIDER to one of:
 #   - direct  : direct Anthropic API
-#   - gateway : Anthropic-compatible gateway (requires ANTHROPIC_BASE_URL)
+#   - gateway : Anthropic-compatible gateway (requires LLM_BASE_URL)
 #   - bedrock : AWS Bedrock
 #
 # Backward compatibility:
 # - If LLM_PROVIDER is unset, provider is inferred:
 #   - bedrock if LLM_PROVIDER=bedrock (legacy)
-#   - gateway if ANTHROPIC_BASE_URL is set
+#   - gateway if LLM_BASE_URL is set
 #   - otherwise direct
 #
 # Bedrock uses standard AWS credential env vars:
@@ -162,11 +162,11 @@ def llm_provider() -> str:
     if raw:
         if raw not in {"direct", "gateway", "bedrock"}:
             die("LLM_PROVIDER must be one of: direct, gateway, bedrock")
-        if raw == "gateway" and not os.environ.get("ANTHROPIC_BASE_URL"):
-            die("LLM_PROVIDER=gateway requires ANTHROPIC_BASE_URL")
+        if raw == "gateway" and not os.environ.get("LLM_BASE_URL"):
+            die("LLM_PROVIDER=gateway requires LLM_BASE_URL")
         return raw
     # Backward-compatible inference when LLM_PROVIDER is not set.
-    if os.environ.get("ANTHROPIC_BASE_URL"):
+    if os.environ.get("LLM_BASE_URL"):
         return "gateway"
     return "direct"
 
@@ -178,10 +178,10 @@ def anthropic_client() -> anthropic.Anthropic | anthropic.AnthropicBedrock:
         print(f"[info] Using AWS Bedrock (region: {region})", flush=True)
         return anthropic.AnthropicBedrock(aws_region=region)
     else:
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        api_key = os.environ.get("LLM_API_KEY")
         if not api_key:
-            die("ANTHROPIC_API_KEY is required for direct/gateway providers")
-        base_url = os.environ.get("ANTHROPIC_BASE_URL")
+            die("LLM_API_KEY is required for direct/gateway providers")
+        base_url = os.environ.get("LLM_BASE_URL")
         kwargs: dict[str, str] = {"api_key": api_key}
         if provider == "gateway" and base_url:
             kwargs["base_url"] = base_url
@@ -195,7 +195,7 @@ def normalize_model_id(model: str) -> str:
     Config stores Bedrock-format IDs (e.g. 'anthropic.claude-sonnet-4-6').
 
     - Bedrock (LLM_PROVIDER=bedrock): keep as-is
-    - LiteLLM gateway (ANTHROPIC_BASE_URL set): keep as-is — gateway is
+    - LiteLLM gateway (LLM_BASE_URL set): keep as-is — gateway is
       deployed on Bedrock and expects Bedrock model IDs
     - Direct Anthropic API: strip the 'anthropic.' prefix
     """

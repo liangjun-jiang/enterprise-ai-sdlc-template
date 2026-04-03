@@ -50,10 +50,18 @@ Go to **Settings → Secrets and variables → Actions** and add:
 
 | Secret | Required | Description |
 |--------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | Anthropic API key, or your LiteLLM gateway key |
-| `ANTHROPIC_BASE_URL` | No | LiteLLM gateway URL — omit to call Anthropic directly |
+| `LLM_PROVIDER` | Yes | `direct`, `gateway`, or `bedrock` |
+| `LLM_API_KEY` | Yes* | Required for `direct` and `gateway` |
+| `LLM_BASE_URL` | Yes* | Required for `gateway` (Anthropic-compatible gateway URL) |
+| `AWS_DEFAULT_REGION` | Yes* | Required for `bedrock` |
+| `AWS_ACCESS_KEY_ID` | Yes* | Required for `bedrock` if not using OIDC/role |
+| `AWS_SECRET_ACCESS_KEY` | Yes* | Required for `bedrock` if not using OIDC/role |
+| `AWS_SESSION_TOKEN` | Optional | For temporary AWS credentials |
+| `AWS_BEDROCK_ENDPOINT_URL` | Optional | Bedrock endpoint override |
 
 `GITHUB_TOKEN` is provided automatically by GitHub Actions — no setup needed.
+
+\* Required depends on selected `LLM_PROVIDER`.
 
 ### 3b. Branches
 

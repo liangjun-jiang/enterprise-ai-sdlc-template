@@ -155,8 +155,8 @@ Set it back to `false` when ready to resume.
 
 | Secret | Required | Notes |
 |--------|----------|-------|
-| `ANTHROPIC_API_KEY` | Yes | Your Anthropic API key, or your LiteLLM gateway key |
-| `ANTHROPIC_BASE_URL` | No | Only needed if using a LiteLLM gateway instead of direct Anthropic |
+| `LLM_API_KEY` | Yes | Your Anthropic API key, or your LiteLLM gateway key |
+| `LLM_BASE_URL` | No | Only needed if using a LiteLLM gateway instead of direct Anthropic |
 | `GITHUB_TOKEN` | Auto | Provided by GitHub Actions automatically — no manual setup needed |
 
 ---
@@ -169,7 +169,7 @@ Check `docs/context/AI_PIPELINE_CONFIG.json` in the `plan-execution` or `plan` b
 
 ### Can I use a different LLM provider?
 
-Yes, via LiteLLM. Set `ANTHROPIC_BASE_URL` to your LiteLLM gateway URL and configure LiteLLM to route `claude-opus-4-6` and `claude-sonnet-4-6` to your chosen provider. Model names in `AI_PIPELINE_CONFIG.json` stay the same.
+Yes, via LiteLLM. Set `LLM_BASE_URL` to your LiteLLM gateway URL and configure LiteLLM to route `claude-opus-4-6` and `claude-sonnet-4-6` to your chosen provider. Model names in `AI_PIPELINE_CONFIG.json` stay the same.
 
 ---
 
@@ -202,7 +202,7 @@ Confirms your credentials and region are correct before running anything real:
 cd .claude/scripts
 
 # Direct Anthropic API
-ANTHROPIC_API_KEY=sk-... uv run python smoke_test.py
+LLM_API_KEY=sk-... uv run python smoke_test.py
 
 # AWS Bedrock
 LLM_PROVIDER=bedrock AWS_DEFAULT_REGION=us-west-2 uv run python smoke_test.py
@@ -215,14 +215,14 @@ A successful run prints the model's one-sentence reply and `OK — LLM connectiv
 Runs the real prompt pipeline (context loading → LLM call → JSON response) but skips branch creation and PR opening. Prints the raw LLM output so you can inspect it:
 
 ```bash
-ANTHROPIC_API_KEY=sk-... uv run python write_code.py \
+LLM_API_KEY=sk-... uv run python write_code.py \
   --dry-run \
   --context-dir ../../docs/context \
   --issue-title "Add /version endpoint" \
   --issue-body "Return app version. Affected files:\n- \`backend/app/main.py\` (modify)"
 ```
 
-Swap in `LLM_PROVIDER=bedrock` instead of `ANTHROPIC_API_KEY` for Bedrock.
+Swap in `LLM_PROVIDER=bedrock` instead of `LLM_API_KEY` for Bedrock.
 
 The `--issue-title` / `--issue-body` defaults are a built-in sample task, so you can run `--dry-run --context-dir ../../docs/context` with no other flags and still get a meaningful response.
 

@@ -7,13 +7,13 @@ the response. Use this to verify your API credentials and provider config
 before running the full pipeline scripts.
 
 Usage (direct Anthropic API):
-    ANTHROPIC_API_KEY=sk-... python smoke_test.py
+    LLM_API_KEY=sk-... python smoke_test.py
 
 Usage (AWS Bedrock):
     LLM_PROVIDER=bedrock AWS_DEFAULT_REGION=us-west-2 python smoke_test.py
 
 Usage (custom model / prompt):
-    ANTHROPIC_API_KEY=sk-... python smoke_test.py \
+    LLM_API_KEY=sk-... python smoke_test.py \
         --model anthropic.claude-haiku-4-5-20251001 \
         --prompt "What is 2+2? Reply in one sentence."
 """
