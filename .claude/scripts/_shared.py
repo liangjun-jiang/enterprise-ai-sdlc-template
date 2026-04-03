@@ -134,9 +134,19 @@ def get_repo(gh: Github, repo_name: str) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Claude client — supports direct Anthropic API and AWS Bedrock
+# Claude client — supports direct Anthropic API, gateway, and AWS Bedrock
 #
-# Set LLM_PROVIDER=bedrock to use AWS Bedrock.
+# Set LLM_PROVIDER to one of:
+#   - direct  : direct Anthropic API
+#   - gateway : Anthropic-compatible gateway (requires ANTHROPIC_BASE_URL)
+#   - bedrock : AWS Bedrock
+#
+# Backward compatibility:
+# - If LLM_PROVIDER is unset, provider is inferred:
+#   - bedrock if LLM_PROVIDER=bedrock (legacy)
+#   - gateway if ANTHROPIC_BASE_URL is set
+#   - otherwise direct
+#
 # Bedrock uses standard AWS credential env vars:
 #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN (optional),
 #   AWS_DEFAULT_REGION (default: us-east-1)
@@ -146,23 +156,36 @@ def get_repo(gh: Github, repo_name: str) -> Any:
 # When using direct Anthropic API the "anthropic." prefix is stripped automatically.
 # ---------------------------------------------------------------------------
 
-def _is_bedrock() -> bool:
-    return os.environ.get("LLM_PROVIDER", "").lower() == "bedrock"
+def llm_provider() -> str:
+    """Resolve and validate the active LLM provider."""
+    raw = os.environ.get("LLM_PROVIDER", "").strip().lower()
+    if raw:
+        if raw not in {"direct", "gateway", "bedrock"}:
+            die("LLM_PROVIDER must be one of: direct, gateway, bedrock")
+        if raw == "gateway" and not os.environ.get("ANTHROPIC_BASE_URL"):
+            die("LLM_PROVIDER=gateway requires ANTHROPIC_BASE_URL")
+        return raw
+    # Backward-compatible inference when LLM_PROVIDER is not set.
+    if os.environ.get("ANTHROPIC_BASE_URL"):
+        return "gateway"
+    return "direct"
 
 
 def anthropic_client() -> anthropic.Anthropic | anthropic.AnthropicBedrock:
-    if _is_bedrock():
+    provider = llm_provider()
+    if provider == "bedrock":
         region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
         print(f"[info] Using AWS Bedrock (region: {region})", flush=True)
         return anthropic.AnthropicBedrock(aws_region=region)
     else:
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            die("ANTHROPIC_API_KEY environment variable is required (or set LLM_PROVIDER=bedrock for AWS Bedrock)")
+            die("ANTHROPIC_API_KEY is required for direct/gateway providers")
         base_url = os.environ.get("ANTHROPIC_BASE_URL")
         kwargs: dict[str, str] = {"api_key": api_key}
-        if base_url:
+        if provider == "gateway" and base_url:
             kwargs["base_url"] = base_url
+            print(f"[info] Using Anthropic-compatible gateway: {base_url}", flush=True)
         return anthropic.Anthropic(**kwargs)  # type: ignore[arg-type]
 
 
@@ -176,7 +199,8 @@ def normalize_model_id(model: str) -> str:
       deployed on Bedrock and expects Bedrock model IDs
     - Direct Anthropic API: strip the 'anthropic.' prefix
     """
-    if _is_bedrock() or os.environ.get("ANTHROPIC_BASE_URL"):
+    provider = llm_provider()
+    if provider in {"bedrock", "gateway"}:
         return model
     if model.startswith("anthropic."):
         return model[len("anthropic."):]
@@ -191,8 +215,9 @@ def call_claude(
     max_tokens: int = 8192,
 ) -> str:
     """Call Claude and return the text of the first content block."""
+    provider = llm_provider()
     resolved_model = normalize_model_id(model)
-    print(f"[info] Model: {resolved_model}", flush=True)
+    print(f"[info] Provider: {provider} | Model: {resolved_model}", flush=True)
     response = client.messages.create(
         model=resolved_model,
         max_tokens=max_tokens,

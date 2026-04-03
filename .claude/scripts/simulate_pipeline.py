@@ -221,6 +221,33 @@ def stamp_approval_frontmatter(content: str, approver_name: str) -> str:
     )
 
 
+def normalize_milestone_filename(name: str, prd_stem: str) -> str:
+    m = re.match(r"^milestone-(\d+)-(.+)\.md$", name)
+    if not m:
+        return name.lower()
+    n, slug = m.group(1), m.group(2).lower()
+    return f"milestone-{n}-for-{prd_stem}-{slug}.md"
+
+
+def normalize_plan_filename(name: str) -> str:
+    m = re.match(r"^(?:PLAN|plan)-(\d+)-(.+)\.md$", name)
+    if not m:
+        return name.lower()
+    n, slug = m.group(1), m.group(2).lower()
+    return f"plan-{n}-for-{slug}.md"
+
+
+def parse_plan_slug(plan_name: str) -> str:
+    stem = plan_name[:-3]
+    m_new = re.match(r"^plan-\d+-for-(.+)$", stem)
+    if m_new:
+        return m_new.group(1)
+    m_old = re.match(r"^(?:PLAN|plan)-\d+-(.+)$", stem)
+    if m_old:
+        return m_old.group(1)
+    return stem
+
+
 def save_state(state: dict[str, Any]) -> None:
     (REPO_ROOT / STATE_FILE).write_text(json.dumps(state, indent=2))
 
@@ -389,6 +416,9 @@ def step_milestones(state: dict[str, Any]) -> None:
     existing = sorted(ms_dir.glob("milestone-*.md"))
     roadmap_file = state["data"].get("roadmap_file", "docs/roadmap/ROADMAP.md")
 
+    prd_rel = state["data"].get("prd_file", "docs/prd/prd-000-dashboard.md")
+    prd_stem = Path(prd_rel).stem
+
     if existing:
         print(f"  {YELLOW}{len(existing)} milestone file(s) already exist — using them (skip LLM call).{R}")
         for f in existing:
@@ -405,6 +435,18 @@ def step_milestones(state: dict[str, Any]) -> None:
             print(f"{RED}  roadmap_to_milestones.py failed — stopping.{R}")
             sys.exit(1)
         existing = sorted(ms_dir.glob("milestone-*.md"))
+
+    # Normalize milestone filenames to lowercase + include "for" lineage.
+    normalized: list[Path] = []
+    for f in existing:
+        target_name = normalize_milestone_filename(f.name, prd_stem)
+        target = f if f.name == target_name else (ms_dir / target_name)
+        if target != f:
+            if target.exists():
+                target.unlink()
+            f.replace(target)
+        normalized.append(target)
+    existing = sorted(normalized)
 
     if not existing:
         restore_original_branch(orig, stashed)
@@ -446,13 +488,13 @@ def step_plans(state: dict[str, Any]) -> None:
     header(f"STEP 5 — Feature Plans  [{ROLES['tech_lead']}]")
     orig, feature_branch, stashed = start_feature_branch("plan", "plan")
     plans_dir = REPO_ROOT / "docs" / "plans"
-    existing = sorted(plans_dir.glob("PLAN-[0-9]*.md"))
+    existing = sorted(plans_dir.glob("PLAN-[0-9]*.md")) + sorted(plans_dir.glob("plan-[0-9]*-for-*.md"))
 
     if existing:
         print(f"  {YELLOW}{len(existing)} plan file(s) already exist — using them (skip LLM call).{R}")
         for f in existing:
             print(f"    • {f.name}")
-        print(f"  To regenerate, delete docs/plans/PLAN-[0-9]*.md and re-run.")
+        print(f"  To regenerate, delete docs/plans/plan-*.md (or legacy PLAN-*.md) and re-run.")
     else:
         ms_files = state["data"].get("milestone_files") or \
             [f.name for f in sorted((REPO_ROOT / "docs" / "milestones").glob("milestone-*.md"))]
@@ -463,7 +505,19 @@ def step_plans(state: dict[str, Any]) -> None:
                 "--context-dir", "docs/context",
                 "--local",
             ])
-        existing = sorted(plans_dir.glob("PLAN-[0-9]*.md"))
+        existing = sorted(plans_dir.glob("PLAN-[0-9]*.md")) + sorted(plans_dir.glob("plan-[0-9]*-for-*.md"))
+
+    # Normalize plan filenames to lowercase + include "for".
+    normalized: list[Path] = []
+    for f in existing:
+        target_name = normalize_plan_filename(f.name)
+        target = f if f.name == target_name else (plans_dir / target_name)
+        if target != f:
+            if target.exists():
+                target.unlink()
+            f.replace(target)
+        normalized.append(target)
+    existing = sorted(normalized)
 
     if not existing:
         restore_original_branch(orig, stashed)
@@ -503,14 +557,16 @@ def step_execution_plans(state: dict[str, Any]) -> None:
         return
 
     plan_files: list[str] = state["data"].get("plan_files") or \
-        [f.name for f in sorted((REPO_ROOT / "docs" / "plans").glob("PLAN-[0-9]*.md"))]
+        [f.name for f in sorted((REPO_ROOT / "docs" / "plans").glob("plan-[0-9]*-for-*.md"))]
+    if not plan_files:
+        plan_files = [f.name for f in sorted((REPO_ROOT / "docs" / "plans").glob("PLAN-[0-9]*.md"))]
 
     header(f"STEP 6 — Execution Plans  [{ROLES['tech_lead']}]")
     orig, feature_branch, stashed = start_feature_branch("plan-execution", "plan-execution")
     print(f"  {len(plan_files)} plan(s) available:\n")
     for i, name in enumerate(plan_files, 1):
-        slug = re.sub(r"^PLAN-\d+-", "", name[:-3]).strip()
-        ep_name = f"EXECUTION-PLAN-{slug}.md"
+        slug = parse_plan_slug(name)
+        ep_name = f"execution-plan-for-{slug}.md"
         ep = REPO_ROOT / "docs" / "execution-plans" / ep_name
         marker = f" {DIM}(exists){R}" if ep.exists() else ""
         print(f"    {i:2d}. {name}{marker}")
@@ -525,7 +581,7 @@ def step_execution_plans(state: dict[str, Any]) -> None:
         selected = [
             n for n in plan_files
             if not (REPO_ROOT / "docs" / "execution-plans" /
-                    f"EXECUTION-PLAN-{re.sub(r'^PLAN-\\d+-', '', n[:-3]).strip()}.md").exists()
+                    f"execution-plan-for-{parse_plan_slug(n)}.md").exists()
         ]
     else:
         idxs = [int(x.strip()) - 1 for x in sel.split(",") if x.strip().isdigit()]
@@ -541,9 +597,9 @@ def step_execution_plans(state: dict[str, Any]) -> None:
     exec_to_plan: dict[str, str] = {}
 
     for plan_name in selected:
-        slug = re.sub(r"^PLAN-\d+-", "", plan_name[:-3]).strip()
+        slug = parse_plan_slug(plan_name)
         plan_path = f"docs/plans/{plan_name}"
-        output_path = f"docs/execution-plans/EXECUTION-PLAN-{slug}.md"
+        output_path = f"docs/execution-plans/execution-plan-for-{slug}.md"
         abs_output = REPO_ROOT / output_path
 
         if abs_output.exists():
@@ -598,7 +654,7 @@ def step_issues(state: dict[str, Any]) -> None:
 
     exec_plans: list[str] = state["data"].get("execution_plans") or [
         str(p.relative_to(REPO_ROOT))
-        for p in sorted((REPO_ROOT / "docs" / "execution-plans").glob("EXECUTION-PLAN-*.md"))
+        for p in sorted((REPO_ROOT / "docs" / "execution-plans").glob("execution-plan-for-*.md"))
     ]
     exec_to_plan: dict[str, str] = state["data"].get("exec_to_plan", {})
 
