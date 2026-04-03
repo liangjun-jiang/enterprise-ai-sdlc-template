@@ -24,6 +24,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from github.GithubException import GithubException, UnknownObjectException
+
 from _shared import (
     anthropic_client,
     apply_token_budget,
@@ -144,8 +146,16 @@ def apply_files_to_branch(
     base_sha: str,
     pr_title: str,
 ) -> None:
-    """Create branch and commit all file changes."""
-    repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=base_sha)
+    """Create or reset branch, then commit all file changes."""
+    ref_name = f"heads/{branch_name}"
+    try:
+        existing_ref = repo.get_git_ref(ref_name)
+        # Re-run safe: reset branch to current dev head so regeneration is idempotent.
+        existing_ref.edit(sha=base_sha, force=True)
+        print(f"[info] Reusing existing branch {branch_name!r} (reset to base)", flush=True)
+    except UnknownObjectException:
+        repo.create_git_ref(ref=f"refs/{ref_name}", sha=base_sha)
+        print(f"[info] Created new branch {branch_name!r}", flush=True)
 
     for file_change in files:
         path = file_change["path"]
@@ -173,6 +183,15 @@ def apply_files_to_branch(
                 repo.create_file(path, f"feat: {pr_title}", content, branch=branch_name)
 
         print(f"[info] {action}: {path}")
+
+
+def find_existing_open_pr(repo: Any, branch_name: str, base_branch: str) -> Any | None:
+    """Return an existing open PR for head branch -> base branch, if any."""
+    owner = repo.owner.login
+    pulls = repo.get_pulls(state="open", head=f"{owner}:{branch_name}", base=base_branch)
+    for pr in pulls:
+        return pr
+    return None
 
 
 def main() -> None:
@@ -243,12 +262,21 @@ def main() -> None:
     apply_files_to_branch(repo, branch_name, files, base_sha, pr_title)
 
     ai_label = config["labels"]["ai_generated"]
-    pr = repo.create_pull(
-        title=pr_title,
-        body=pr_body + f"\n\nCloses #{args.issue_number}",
-        head=branch_name,
-        base=dev_branch,
-    )
+    existing_pr = find_existing_open_pr(repo, branch_name, dev_branch)
+    if existing_pr:
+        pr = existing_pr
+        print(f"[info] Reusing existing open PR: {pr.html_url}")
+        try:
+            pr.edit(title=pr_title, body=pr_body + f"\n\nCloses #{args.issue_number}")
+        except GithubException:
+            pass
+    else:
+        pr = repo.create_pull(
+            title=pr_title,
+            body=pr_body + f"\n\nCloses #{args.issue_number}",
+            head=branch_name,
+            base=dev_branch,
+        )
     try:
         pr.add_to_labels(ai_label)
     except Exception:

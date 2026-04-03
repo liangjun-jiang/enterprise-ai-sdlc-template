@@ -99,10 +99,14 @@ Configure in **Settings → Branches → Add rule** for each branch:
 
 ### 3d. Workflow permissions
 
-Go to **Settings → Actions → General → Workflow permissions** and set:
+Enable these repository-level GitHub Actions settings:
 
-- **Read and write permissions** ✓
-- **Allow GitHub Actions to create and approve pull requests** ✓
+1. Go to your repository **Settings**
+2. In the left sidebar, open **Actions → General**
+3. Scroll to **Workflow permissions**
+4. Select **Read and write permissions**
+5. Check **Allow GitHub Actions to create and approve pull requests**
+6. Click **Save**
 
 These are required for the AI pipeline workflows to create branches, open PRs, and post reviews.
 
