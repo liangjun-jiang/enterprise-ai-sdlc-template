@@ -127,11 +127,27 @@ def build_user_message(
 
 
 def parse_code_response(raw: str) -> dict[str, Any]:
-    """Extract JSON from Claude's response, stripping markdown fences if present."""
+    """Extract JSON from Claude's response, stripping wrappers if present."""
     text = raw.strip()
     if text.startswith("```"):
         lines = text.splitlines()
         text = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
+    # Some model responses prepend prose. Recover the first balanced JSON object.
+    if not text.startswith("{"):
+        start = text.find("{")
+        if start != -1:
+            depth = 0
+            end = -1
+            for i, ch in enumerate(text[start:], start=start):
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            if end != -1:
+                text = text[start:end]
     try:
         result: dict[str, Any] = json.loads(text)
     except json.JSONDecodeError as e:
@@ -234,8 +250,9 @@ def main() -> None:
     )
 
     print(f"[info] Calling {model} to generate code...", flush=True)
+    client = anthropic_client()
     raw_response = call_claude(
-        client=anthropic_client(),
+        client=client,
         model=model,
         system=system_prompt,
         user=user_message,
@@ -248,7 +265,23 @@ def main() -> None:
         print("[dry-run] === END ===")
         return
 
-    result = parse_code_response(raw_response)
+    try:
+        result = parse_code_response(raw_response)
+    except SystemExit:
+        print("[warn] Invalid JSON response; retrying with strict JSON-only instruction...", flush=True)
+        repair_user_message = (
+            user_message
+            + "\n\nIMPORTANT: Re-output your previous answer as valid JSON only. "
+            + "No prose, no markdown fences, no explanation."
+        )
+        raw_response = call_claude(
+            client=client,
+            model=model,
+            system=system_prompt,
+            user=repair_user_message,
+            max_tokens=max_output,
+        )
+        result = parse_code_response(raw_response)
     branch_name: str = result["branch_name"]
     pr_title: str = result["pr_title"]
     pr_body: str = result["pr_body"]

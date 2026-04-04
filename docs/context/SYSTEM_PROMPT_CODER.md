@@ -14,6 +14,8 @@ Implement the task. Output a JSON object describing the exact file changes to ma
 
 ## Output Format
 
+Return **only** a valid JSON object. Do not include any prose before or after the JSON. Do not wrap it in markdown code fences.
+
 ```json
 {
   "branch_name": "feat/task-001-short-description",
