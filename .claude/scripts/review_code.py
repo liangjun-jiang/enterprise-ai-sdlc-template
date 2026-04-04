@@ -120,7 +120,8 @@ def main() -> None:
     if verdict not in ("APPROVE", "REQUEST_CHANGES"):
         die(f"Unexpected verdict: {verdict!r}")
 
-    pr.create_review(body=body, event=verdict)
+    review_body = f"**AI verdict:** `{verdict}`\n\n{body}"
+    pr.create_review(body=review_body, event="COMMENT")
 
     ai_reviewed_label = config["labels"]["ai_reviewed"]
     needs_human_label = config["labels"]["needs_human_review"]
@@ -131,7 +132,7 @@ def main() -> None:
     except Exception:
         pass
 
-    print(f"[info] Review posted: {verdict}")
+    print(f"[info] Review posted as COMMENT (verdict: {verdict})")
 
 
 if __name__ == "__main__":
