@@ -47,6 +47,30 @@ async def health() -> HealthResponse:
 
 ---
 
+## Defined Models
+
+### `AiMetricsResponse` (`backend/app/models/ai_metrics.py`)
+
+Response body for the AI pipeline metrics endpoint.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `period` | `str` | Echoed query parameter — `'this_week'` or `'this_month'` |
+| `period_start` | `date` | ISO-8601 date of the period start (Monday or 1st of month) |
+| `period_end` | `date` | ISO-8601 date of today (UTC) |
+| `plans_generated` | `int` | Count of issues with labels `ai-generated` and `ai-plan` |
+| `issues_created_by_ai` | `int` | Count of issues with label `ai-generated` |
+| `ai_prs_opened` | `int` | Count of pull requests with label `ai-generated` |
+| `ai_prs_merged` | `int` | Subset of `ai_prs_opened` that are merged |
+| `ai_prs_rejected_closed` | `int` | Subset of `ai_prs_opened` that are closed but not merged |
+
+**Companion helpers in the same module:**
+
+- `compute_period_range(period: str) -> tuple[date, date]` — returns `(period_start, today)` for `'this_week'` (Monday-anchored) or `'this_month'` (1st-of-month-anchored); raises `ValueError` for unrecognised values.
+- `validate_github_env() -> None` — raises `RuntimeError` at startup if `GITHUB_TOKEN` or `GITHUB_REPO` are missing, or if `GITHUB_REPO` does not match the `owner/repo` format.
+
+---
+
 ## When a Database Is Added
 
 Before adding any database integration, the following must happen first:
