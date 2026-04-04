@@ -62,6 +62,55 @@ Returns build metadata.
 
 ---
 
+## Planned Endpoints (AI pipeline metrics)
+
+### `GET /api/v1/ai-metrics`
+
+Returns AI pipeline activity metrics for a given time period.
+
+**Required environment variables (validated at startup):**
+| Variable | Format | Description |
+|----------|--------|-------------|
+| `GITHUB_TOKEN` | string | GitHub personal access token with `repo` scope |
+| `GITHUB_REPO` | `owner/repo` | Target GitHub repository (e.g. `acme/my-repo`) |
+
+**Query parameters:**
+| Parameter | Type | Required | Values | Description |
+|-----------|------|----------|--------|-------------|
+| `period` | `string` | Yes | `this_week`, `this_month` | Time window for metrics |
+
+**Response `200 OK`:**
+```json
+{
+  "period": "this_week",
+  "period_start": "2024-01-15",
+  "period_end": "2024-01-21",
+  "plans_generated": 5,
+  "issues_created_by_ai": 12,
+  "ai_prs_opened": 8,
+  "ai_prs_merged": 6,
+  "ai_prs_rejected_closed": 2
+}
+```
+
+**Response schema (`AiMetricsResponse`):**
+| Field | Type | Description |
+|-------|------|-------------|
+| `period` | `string` | Echoed query parameter |
+| `period_start` | `string` (ISO-8601 date) | Start of the period (Monday for `this_week`, 1st for `this_month`) |
+| `period_end` | `string` (ISO-8601 date) | Today's date (UTC) |
+| `plans_generated` | `integer` | Issues with labels `ai-generated` and `ai-plan` |
+| `issues_created_by_ai` | `integer` | Issues with label `ai-generated` |
+| `ai_prs_opened` | `integer` | Pull requests with label `ai-generated` |
+| `ai_prs_merged` | `integer` | Subset of `ai_prs_opened` that are merged |
+| `ai_prs_rejected_closed` | `integer` | Subset of `ai_prs_opened` that are closed but not merged |
+
+**Error responses:**
+- `422 Unprocessable Entity` — `period` query parameter is missing or not a recognised value
+- `500 Internal Server Error` — GitHub API call failed or env vars invalid
+
+---
+
 ## Contract Rules
 
 1. All responses are JSON (`Content-Type: application/json`)
