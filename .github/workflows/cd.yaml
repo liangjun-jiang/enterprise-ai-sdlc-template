@@ -1,0 +1,43 @@
+name: CD simulation
+
+on:
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+jobs:
+  docker-smoke:
+    name: Build images and compose smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Start stack (skip GitHub env for smoke)
+        run: |
+          printf '%s\n' 'SKIP_ENV_VALIDATION=1' > backend/.env
+          docker compose up -d
+
+      - name: Wait for backend /health
+        run: |
+          set -e
+          for i in $(seq 1 40); do
+            if curl -sf http://localhost:8000/health >/dev/null; then
+              echo "Backend healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend did not become healthy in time"
+          docker compose ps
+          docker compose logs backend --tail 200
+          exit 1
+
+      - name: Check frontend responds
+        run: curl -sf -o /dev/null -w "%{http_code}\n" http://localhost:3000/ | grep -q '^200$'
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
