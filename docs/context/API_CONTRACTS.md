@@ -62,11 +62,11 @@ Returns build metadata.
 
 ---
 
-## Planned Endpoints (AI pipeline metrics)
+## Implemented Endpoints
 
 ### `GET /api/v1/ai-metrics`
 
-Returns AI pipeline activity metrics for a given time period.
+Returns AI pipeline activity metrics for a given time period. Queries the GitHub Search API using the `GITHUB_TOKEN` and `GITHUB_REPO` environment variables.
 
 **Required environment variables (validated at startup):**
 | Variable | Format | Description |
@@ -107,7 +107,7 @@ Returns AI pipeline activity metrics for a given time period.
 
 **Error responses:**
 - `422 Unprocessable Entity` — `period` query parameter is missing or not a recognised value
-- `500 Internal Server Error` — GitHub API call failed or env vars invalid
+- `502 Bad Gateway` — GitHub API returned a non-2xx status or was unreachable; detail is always `"GitHub API error: <status>"` — raw GitHub response bodies are never forwarded
 
 ---
 
@@ -117,5 +117,6 @@ Returns AI pipeline activity metrics for a given time period.
 2. All success responses use `2xx` status codes
 3. Validation errors return `422 Unprocessable Entity` (FastAPI default)
 4. Unexpected errors return `500 Internal Server Error` with `{"detail": "<message>"}`
-5. Endpoints never return `null` for top-level fields — use `"unknown"` or omit the field
-6. When adding a new endpoint, add it to this file in the same PR as the implementation
+5. GitHub API errors return `502 Bad Gateway` with a sanitised message — raw upstream error bodies are never forwarded
+6. Endpoints never return `null` for top-level fields — use `"unknown"` or omit the field
+7. When adding a new endpoint, add it to this file in the same PR as the implementation
