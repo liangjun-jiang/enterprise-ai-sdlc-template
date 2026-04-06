@@ -18,6 +18,7 @@ import argparse
 import base64
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -210,6 +211,95 @@ def find_existing_open_pr(repo: Any, branch_name: str, base_branch: str) -> Any 
     return None
 
 
+def _is_backend_touched(files: list[dict[str, str]]) -> bool:
+    return any((f.get("path") or "").startswith("backend/") for f in files)
+
+
+def _is_frontend_touched(files: list[dict[str, str]]) -> bool:
+    return any((f.get("path") or "").startswith("frontend/") for f in files)
+
+
+def _run_check(cmd: list[str], cwd: Path) -> tuple[bool, str]:
+    result = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True)
+    output = (result.stdout or "") + (result.stderr or "")
+    return result.returncode == 0, output
+
+
+def _apply_generated_files_locally(
+    repo_root: Path, files: list[dict[str, str]]
+) -> list[tuple[Path, bool, str]]:
+    """Apply generated files to local checkout and return restore state."""
+    backups: list[tuple[Path, bool, str]] = []
+    for file_change in files:
+        rel = file_change["path"]
+        action = file_change["action"]
+        content = file_change.get("content", "")
+        target = (repo_root / rel).resolve()
+        repo_resolved = repo_root.resolve()
+        if repo_resolved not in [target, *target.parents]:
+            die(f"Refusing to write outside repo: {rel}")
+
+        existed = target.exists()
+        old_content = target.read_text() if existed else ""
+        backups.append((target, existed, old_content))
+
+        if action == "delete":
+            if existed:
+                target.unlink()
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content)
+    return backups
+
+
+def _restore_local_files(backups: list[tuple[Path, bool, str]]) -> None:
+    for target, existed, old_content in reversed(backups):
+        if existed:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(old_content)
+        else:
+            if target.exists():
+                target.unlink()
+
+
+def run_generated_code_checks(repo_root: Path, files: list[dict[str, str]]) -> str | None:
+    """Run CI-like checks on generated code before opening/updating PR.
+
+    Returns:
+        None when all checks pass, otherwise a compact error string.
+    """
+    backend_touched = _is_backend_touched(files)
+    frontend_touched = _is_frontend_touched(files)
+    if not backend_touched and not frontend_touched:
+        print("[info] No backend/frontend files touched; skipping code checks.", flush=True)
+        return None
+
+    checks: list[tuple[list[str], Path, str]] = []
+    if backend_touched:
+        backend_dir = repo_root / "backend"
+        checks += [
+            (["uv", "sync", "--frozen"], backend_dir, "backend deps"),
+            (["uv", "run", "ruff", "check", "."], backend_dir, "backend lint"),
+            (["uv", "run", "mypy", "app"], backend_dir, "backend type-check"),
+            (["uv", "run", "pytest"], backend_dir, "backend tests"),
+        ]
+    if frontend_touched:
+        frontend_dir = repo_root / "frontend"
+        checks += [
+            (["npm", "ci"], frontend_dir, "frontend deps"),
+            (["npm", "run", "lint"], frontend_dir, "frontend lint"),
+            (["npm", "run", "test"], frontend_dir, "frontend tests"),
+        ]
+
+    for cmd, cwd, label in checks:
+        print(f"[info] Running {label}: {' '.join(cmd)} (cwd={cwd})", flush=True)
+        ok, output = _run_check(cmd, cwd)
+        if not ok:
+            tail = output[-4000:] if output else "(no output)"
+            return f"{label} failed.\n\n{tail}"
+    return None
+
+
 def main() -> None:
     args = parse_args()
     repo_root = find_repo_root()
@@ -286,6 +376,43 @@ def main() -> None:
     pr_title: str = result["pr_title"]
     pr_body: str = result["pr_body"]
     files: list[dict[str, str]] = result["files"]
+
+    # Validate generated code against CI-style checks before PR creation/update.
+    def validate_files(candidate_files: list[dict[str, str]]) -> str | None:
+        backups: list[tuple[Path, bool, str]] = []
+        try:
+            backups = _apply_generated_files_locally(repo_root, candidate_files)
+            return run_generated_code_checks(repo_root, candidate_files)
+        finally:
+            if backups:
+                _restore_local_files(backups)
+
+    check_error = validate_files(files)
+    if check_error:
+        print("[warn] Generated code failed checks; attempting one LLM repair pass...", flush=True)
+        repair_user_message = (
+            user_message
+            + "\n\nThe previous generated patch failed CI-style checks.\n"
+            + "Regenerate the FULL JSON response (all fields and full file contents) with fixes.\n"
+            + "Only output JSON.\n\n"
+            + "Failed check output (trimmed):\n"
+            + check_error
+        )
+        repair_raw = call_claude(
+            client=client,
+            model=model,
+            system=system_prompt,
+            user=repair_user_message,
+            max_tokens=max_output,
+        )
+        repaired = parse_code_response(repair_raw)
+        branch_name = repaired["branch_name"]
+        pr_title = repaired["pr_title"]
+        pr_body = repaired["pr_body"]
+        files = repaired["files"]
+        check_error = validate_files(files)
+        if check_error:
+            die(f"Generated code failed checks after repair attempt.\n\n{check_error}")
 
     dev_branch = config["branches"]["dev"]
     base = repo.get_branch(dev_branch)

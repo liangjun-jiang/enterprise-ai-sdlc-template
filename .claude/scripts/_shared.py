@@ -40,7 +40,7 @@ def check_circuit_breaker(config: dict[str, Any]) -> None:
 # Context assembly
 # ---------------------------------------------------------------------------
 
-_ALWAYS_INCLUDED = ["ARCHITECTURE.md", "SECURITY_CHECKLIST.md"]
+_ALWAYS_INCLUDED = ["ARCHITECTURE.md", "SECURITY_CHECKLIST.md", "CODEBASE_OVERVIEW.md"]
 
 _BACKEND_FILES = ["CODING_STANDARDS.md", "DATA_MODELS.md", "API_CONTRACTS.md", "CURRENT_TECH_STACK.md"]
 _FRONTEND_FILES = ["CODING_STANDARDS.md", "API_CONTRACTS.md", "CURRENT_TECH_STACK.md"]

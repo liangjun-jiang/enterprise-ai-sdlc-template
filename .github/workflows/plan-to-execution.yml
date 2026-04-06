@@ -47,6 +47,24 @@ jobs:
         run: uv sync --frozen
         working-directory: .claude/scripts
 
+      - name: Check context freshness
+        run: |
+          python3 - <<'PY'
+          from datetime import datetime, timezone, timedelta
+          from pathlib import Path
+          import sys
+
+          p = Path("docs/context/CODEBASE_OVERVIEW.md")
+          if not p.exists():
+              print("::error::Missing docs/context/CODEBASE_OVERVIEW.md. Run post-merge housekeeping.")
+              sys.exit(1)
+          age = datetime.now(timezone.utc) - datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc)
+          if age > timedelta(days=14):
+              print(f"::error::docs/context/CODEBASE_OVERVIEW.md is stale ({age.days} days old).")
+              sys.exit(1)
+          print(f"Context freshness OK ({age.days} days old).")
+          PY
+
       - name: Generate execution plan
         run: |
           uv run --project .claude/scripts python .claude/scripts/generate_execution_plan.py \

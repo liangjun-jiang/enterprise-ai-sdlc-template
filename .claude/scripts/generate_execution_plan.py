@@ -80,6 +80,13 @@ def load_upstream_context(frontmatter: dict[str, str], repo_root: Path) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+def load_codebase_overview(repo_root: Path) -> str:
+    overview_path = repo_root / "docs" / "context" / "CODEBASE_OVERVIEW.md"
+    if not overview_path.exists():
+        return ""
+    return overview_path.read_text()
+
+
 def main() -> None:
     args = parse_args()
     repo_root = find_repo_root()
@@ -97,6 +104,7 @@ def main() -> None:
     plan_content = plan_path.read_text()
     frontmatter = read_plan_frontmatter(plan_content)
     upstream_context = load_upstream_context(frontmatter, repo_root)
+    codebase_overview = load_codebase_overview(repo_root)
 
     context_docs = load_context_docs(context_dir)
     system_prompt = load_system_prompt(context_dir, "SYSTEM_PROMPT_PLANNER.md")
@@ -107,6 +115,8 @@ def main() -> None:
     sections = [f"# Feature Plan\n\n{plan_content}"]
     if upstream_context:
         sections.append(f"# Upstream Context (PRD / Milestone)\n\n{upstream_context}")
+    if codebase_overview:
+        sections.append(f"# Current Codebase Overview\n\n{codebase_overview}")
     sections.append(f"# Project Context\n\n{context_docs}")
 
     user_message = apply_token_budget("\n\n---\n\n".join(sections), max_context)

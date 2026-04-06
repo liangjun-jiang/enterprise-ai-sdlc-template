@@ -121,9 +121,17 @@ def load_prd(prd_ref: str, repo_root: Path) -> str:
     return f"## Referenced PRD\n\n{prd_path.read_text()}"
 
 
+def load_codebase_overview(repo_root: Path) -> str:
+    overview_path = repo_root / "docs" / "context" / "CODEBASE_OVERVIEW.md"
+    if not overview_path.exists():
+        return ""
+    return f"## Current Codebase Overview\n\n{overview_path.read_text()}"
+
+
 def build_user_message(
     milestone_content: str,
     prd_content: str,
+    codebase_overview: str,
     context_docs: str,
     existing_slugs: list[str],
     max_context: int,
@@ -131,6 +139,8 @@ def build_user_message(
     parts = [f"## Milestone\n\n{milestone_content}"]
     if prd_content:
         parts.append(prd_content)
+    if codebase_overview:
+        parts.append(codebase_overview)
     if existing_slugs:
         slugs_list = "\n".join(f"- {s}" for s in existing_slugs)
         parts.append(
@@ -214,6 +224,7 @@ def main() -> None:
 
     milestone_content = milestone_path.read_text()
     prd_content = load_prd(prd_ref, repo_root)
+    codebase_overview = load_codebase_overview(repo_root)
     context_dir = Path(args.context_dir)
     context_docs = load_context_docs(context_dir)
     system_prompt = MILESTONE_TO_PLANS_PROMPT
@@ -231,7 +242,14 @@ def main() -> None:
     max_context = config["token_budget"]["max_context_tokens"]
     max_output = config["token_budget"]["max_output_tokens"]
 
-    user_message = build_user_message(milestone_content, prd_content, context_docs, existing_slugs, max_context)
+    user_message = build_user_message(
+        milestone_content,
+        prd_content,
+        codebase_overview,
+        context_docs,
+        existing_slugs,
+        max_context,
+    )
 
     print(f"[info] Calling {model} to generate plans for milestone {milestone_id!r}...", flush=True)
     raw = call_claude(
