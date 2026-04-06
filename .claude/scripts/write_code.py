@@ -2,7 +2,7 @@
 """
 write_code.py
 
-Reads a GitHub Issue (task description + affected files) and calls Claude Sonnet
+Reads a GitHub Issue (title, body, comments, + affected files) and calls Claude Sonnet
 to generate code. Creates a branch, commits the files, and opens a PR.
 
 Usage:
@@ -59,9 +59,16 @@ def parse_args() -> argparse.Namespace:
         ),
         help="Issue body text (dry-run only)",
     )
+    parser.add_argument(
+        "--issue-comments",
+        default="",
+        help="Issue comments text, same shape as format_issue_comments output (dry-run only)",
+    )
     args = parser.parse_args()
     if not args.dry_run and (not args.issue_number or not args.repo):
         parser.error("--issue-number and --repo are required unless --dry-run is set")
+    if args.issue_comments and not args.dry_run:
+        parser.error("--issue-comments is only valid with --dry-run")
     return args
 
 
@@ -95,9 +102,31 @@ def extract_affected_files(issue_body: str) -> list[str]:
     return paths
 
 
+def format_issue_comments(issue: Any) -> tuple[str, int]:
+    """Build markdown for all issue comments (oldest first). Returns (text, count)."""
+    try:
+        comments = list(issue.get_comments())
+    except Exception as e:
+        print(f"[warn] Could not load issue comments: {e}", file=sys.stderr)
+        return "", 0
+    parts: list[str] = []
+    for c in comments:
+        author = getattr(c.user, "login", None) or "unknown"
+        when = getattr(c, "created_at", None)
+        when_s = when.isoformat() if when is not None else ""
+        body = (c.body or "").strip()
+        header = f"### @{author}"
+        if when_s:
+            header += f" ({when_s})"
+        parts.append(f"{header}\n{body}")
+    text = "\n\n".join(parts) if parts else ""
+    return text, len(comments)
+
+
 def build_user_message(
     issue_title: str,
     issue_body: str,
+    issue_comments_markdown: str,
     affected_files: list[str],
     repo_root: Path,
     context_docs: str,
@@ -110,6 +139,12 @@ def build_user_message(
 
     files_section = "\n\n".join(file_contents) if file_contents else "_No affected files listed._"
 
+    comments_section = (
+        issue_comments_markdown.strip()
+        if issue_comments_markdown.strip()
+        else "_No comments on this issue._"
+    )
+
     message = f"""# Task to Implement
 
 ## Title
@@ -117,6 +152,9 @@ def build_user_message(
 
 ## Description & Acceptance Criteria
 {issue_body}
+
+## Issue discussion (comments)
+{comments_section}
 
 ## Current File Contents
 {files_section}
@@ -313,19 +351,30 @@ def main() -> None:
     max_context = config["token_budget"]["max_context_tokens"]
     max_output = config["token_budget"]["max_output_tokens"]
 
+    issue_comments_markdown = ""
+
     if args.dry_run:
         issue_title = args.issue_title
         issue_body = args.issue_body
+        issue_comments_markdown = args.issue_comments or ""
         print(f"[dry-run] Using inline issue: {issue_title!r}")
+        if issue_comments_markdown.strip():
+            print("[dry-run] Including --issue-comments in prompt.", flush=True)
     else:
         gh = github_client()
         repo = get_repo(gh, args.repo)
         issue = repo.get_issue(args.issue_number)
         issue_title = issue.title
         issue_body = issue.body or ""
+        issue_comments_markdown, n_comments = format_issue_comments(issue)
         print(f"[info] Processing issue #{args.issue_number}: {issue_title}")
+        if issue_comments_markdown:
+            print(f"[info] Loaded {n_comments} issue comment(s) into prompt.", flush=True)
 
-    affected_files = extract_affected_files(issue_body)
+    combined_for_paths = issue_body
+    if issue_comments_markdown.strip():
+        combined_for_paths = f"{issue_body}\n\n{issue_comments_markdown}"
+    affected_files = extract_affected_files(combined_for_paths)
     print(f"[info] Affected files: {affected_files}")
 
     context_docs = load_context_docs(context_dir, affected_paths=affected_files)
@@ -333,6 +382,7 @@ def main() -> None:
     user_message = build_user_message(
         issue_title=issue_title,
         issue_body=issue_body,
+        issue_comments_markdown=issue_comments_markdown,
         affected_files=affected_files,
         repo_root=repo_root,
         context_docs=context_docs,
