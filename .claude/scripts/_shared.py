@@ -214,7 +214,7 @@ def call_claude(
     user: str,
     max_tokens: int = 8192,
 ) -> str:
-    """Call Claude and return the text of the first content block."""
+    """Call Claude and return all concatenated text blocks (long replies may be split)."""
     provider = llm_provider()
     resolved_model = normalize_model_id(model)
     print(f"[info] Provider: {provider} | Model: {resolved_model}", flush=True)
@@ -224,10 +224,68 @@ def call_claude(
         system=system,
         messages=[{"role": "user", "content": user}],
     )
-    block = response.content[0]
-    if block.type != "text":
-        die(f"Unexpected response content type: {block.type}")
-    return block.text
+    parts: list[str] = []
+    for block in response.content:
+        if block.type == "text":
+            parts.append(block.text)
+    if not parts:
+        die(
+            "Claude returned no text blocks (empty response). "
+            "Check max_tokens, API errors, or non-text content (e.g. tool_use)."
+        )
+    return "".join(parts)
+
+
+def _strip_markdown_code_fence(text: str) -> str:
+    """If the model wrapped output in a ``` fences, return inner content."""
+    t = text.strip()
+    if not t.startswith("```"):
+        return text
+    lines = t.split("\n")
+    body: list[str] = []
+    for line in lines[1:]:
+        if line.strip() == "```":
+            return "\n".join(body).strip()
+        body.append(line)
+    return "\n".join(lines[1:]).strip()
+
+
+def _normalize_model_json_text(raw: str) -> str:
+    """Strip BOM and optional markdown fence; model may add prose before/after JSON."""
+    t = raw.strip().removeprefix("\ufeff")
+    t = _strip_markdown_code_fence(t)
+    return t.strip()
+
+
+def try_parse_llm_json(raw: str) -> Any | None:
+    """Parse the first JSON value in *raw* (prose, fences, trailing junk). Returns None on failure."""
+    text = _normalize_model_json_text(raw)
+    if not text:
+        return None
+    decoder = json.JSONDecoder()
+    for i, c in enumerate(text):
+        if c in "{[":
+            try:
+                return decoder.raw_decode(text[i:])[0]
+            except json.JSONDecodeError:
+                continue
+    return None
+
+
+def parse_llm_json(raw: str) -> Any:
+    """Like try_parse_llm_json but exits on failure."""
+    val = try_parse_llm_json(raw)
+    if val is None:
+        die(f"Claude returned invalid JSON. Raw (truncated):\n{raw[:2000]!r}")
+    return val
+
+
+def parse_llm_json_dict(raw: str) -> dict[str, Any]:
+    """Parse a JSON object from model output; exit if not a JSON object."""
+    val = parse_llm_json(raw)
+    if not isinstance(val, dict):
+        die(f"Expected a JSON object, got {type(val).__name__}")
+    return val
 
 
 # ---------------------------------------------------------------------------

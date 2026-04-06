@@ -31,6 +31,8 @@ from _shared import (
     github_client,
     load_context_docs,
     load_pipeline_config,
+    parse_llm_json_dict,
+    try_parse_llm_json,
 )
 
 UPDATE_SYSTEM_PROMPT = """\
@@ -107,20 +109,35 @@ def main() -> None:
     )
 
     print(f"[info] Calling {model} to identify doc updates...", flush=True)
-    import json
+    client = anthropic_client()
 
     raw = call_claude(
-        client=anthropic_client(),
+        client=client,
         model=model,
         system=UPDATE_SYSTEM_PROMPT,
         user=user_message,
         max_tokens=max_output,
     )
 
-    try:
-        updates: dict[str, str] = json.loads(raw.strip())
-    except json.JSONDecodeError as e:
-        die(f"Claude returned invalid JSON: {e}\n\nRaw:\n{raw[:500]}")
+    parsed = try_parse_llm_json(raw)
+    if not isinstance(parsed, dict):
+        print(
+            "[warn] Invalid JSON from context updater; retrying with JSON-only instruction...",
+            flush=True,
+        )
+        raw = call_claude(
+            client=client,
+            model=model,
+            system=UPDATE_SYSTEM_PROMPT,
+            user=user_message
+            + "\n\nIMPORTANT: Output ONLY a single valid JSON object. "
+            "Keys are file paths, values are full file contents. "
+            "No markdown fences, no commentary.",
+            max_tokens=max_output,
+        )
+        updates = parse_llm_json_dict(raw)
+    else:
+        updates = parsed
 
     if not updates:
         print("[info] No context doc updates needed.")

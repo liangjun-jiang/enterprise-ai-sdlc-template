@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import json
 import re
 import subprocess
 import sys
@@ -39,6 +38,7 @@ from _shared import (
     load_context_docs,
     load_pipeline_config,
     load_system_prompt,
+    parse_llm_json_dict,
     read_file_safe,
 )
 
@@ -166,32 +166,8 @@ def build_user_message(
 
 
 def parse_code_response(raw: str) -> dict[str, Any]:
-    """Extract JSON from Claude's response, stripping wrappers if present."""
-    text = raw.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        text = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
-    # Some model responses prepend prose. Recover the first balanced JSON object.
-    if not text.startswith("{"):
-        start = text.find("{")
-        if start != -1:
-            depth = 0
-            end = -1
-            for i, ch in enumerate(text[start:], start=start):
-                if ch == "{":
-                    depth += 1
-                elif ch == "}":
-                    depth -= 1
-                    if depth == 0:
-                        end = i + 1
-                        break
-            if end != -1:
-                text = text[start:end]
-    try:
-        result: dict[str, Any] = json.loads(text)
-    except json.JSONDecodeError as e:
-        die(f"Claude returned invalid JSON: {e}\n\nRaw:\n{raw[:500]}")
-    return result
+    """Extract JSON object from Claude's response (handles fences, prose, split blocks)."""
+    return parse_llm_json_dict(raw)
 
 
 def apply_files_to_branch(
