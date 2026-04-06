@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import './App.css';
 
 type Period = 'this_week' | 'this_month';
 
-type AiMetricsResponse = {
+type AiMetrics = {
   period: string;
   period_start: string;
   period_end: string;
@@ -17,21 +17,10 @@ type AiMetricsResponse = {
 type FetchState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'success'; data: AiMetricsResponse }
+  | { status: 'success'; data: AiMetrics }
   | { status: 'error'; message: string };
 
-function MetricCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="metric-card" data-testid="metric-card">
-      <span className="metric-value" data-testid={`metric-value-${label.toLowerCase().replace(/\s+/g, '-')}`}>
-        {value}
-      </span>
-      <span className="metric-label">{label}</span>
-    </div>
-  );
-}
-
-export default function App() {
+function App() {
   const [period, setPeriod] = useState<Period>('this_week');
   const [fetchState, setFetchState] = useState<FetchState>({ status: 'idle' });
 
@@ -43,7 +32,7 @@ export default function App() {
         setFetchState({ status: 'error', message: `Request failed: ${response.status} ${response.statusText}` });
         return;
       }
-      const data = (await response.json()) as AiMetricsResponse;
+      const data: AiMetrics = await response.json() as AiMetrics;
       setFetchState({ status: 'success', data });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -52,7 +41,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    void fetchMetrics(period);
+    fetchMetrics(period);
   }, [period, fetchMetrics]);
 
   const handlePeriodChange = useCallback((newPeriod: Period) => {
@@ -60,56 +49,66 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app">
-      <header className="app-header">
+    <div className="dashboard">
+      <header className="dashboard-header">
         <h1>AI Pipeline Metrics</h1>
-        <p className="app-subtitle">GitHub activity for AI-generated code</p>
-      </header>
-
-      <main className="app-main">
         <div className="period-selector" role="group" aria-label="Select time period">
           <button
-            className={`period-button${period === 'this_week' ? ' period-button--active' : ''}`}
+            className={period === 'this_week' ? 'active' : ''}
             onClick={() => handlePeriodChange('this_week')}
             aria-pressed={period === 'this_week'}
-            data-testid="period-this-week"
           >
             This Week
           </button>
           <button
-            className={`period-button${period === 'this_month' ? ' period-button--active' : ''}`}
+            className={period === 'this_month' ? 'active' : ''}
             onClick={() => handlePeriodChange('this_month')}
             aria-pressed={period === 'this_month'}
-            data-testid="period-this-month"
           >
             This Month
           </button>
         </div>
+      </header>
 
+      <main>
         {fetchState.status === 'loading' && (
-          <div className="state-container" data-testid="loading-indicator">
-            <p>Loading metrics…</p>
+          <div className="status-message" data-testid="loading-indicator">
+            Loading metrics…
           </div>
         )}
 
         {fetchState.status === 'error' && (
-          <div className="state-container state-error" data-testid="error-message" role="alert">
-            <p>Failed to load metrics: {fetchState.message}</p>
-            <button onClick={() => void fetchMetrics(period)}>Retry</button>
+          <div className="status-message error" data-testid="error-message" role="alert">
+            {fetchState.message}
           </div>
         )}
 
         {fetchState.status === 'success' && (
-          <div className="metrics-container" data-testid="metrics-container">
-            <p className="period-range" data-testid="period-range">
+          <div data-testid="metrics-display">
+            <p className="period-range">
               {fetchState.data.period_start} – {fetchState.data.period_end}
             </p>
             <div className="metrics-grid">
-              <MetricCard label="Plans Generated" value={fetchState.data.plans_generated} />
-              <MetricCard label="Issues Created by AI" value={fetchState.data.issues_created_by_ai} />
-              <MetricCard label="PRs Opened" value={fetchState.data.ai_prs_opened} />
-              <MetricCard label="PRs Merged" value={fetchState.data.ai_prs_merged} />
-              <MetricCard label="PRs Rejected" value={fetchState.data.ai_prs_rejected_closed} />
+              <div className="metric-card" data-testid="metric-plans-generated">
+                <span className="metric-value">{fetchState.data.plans_generated}</span>
+                <span className="metric-label">Plans Generated</span>
+              </div>
+              <div className="metric-card" data-testid="metric-issues-created">
+                <span className="metric-value">{fetchState.data.issues_created_by_ai}</span>
+                <span className="metric-label">Issues Created by AI</span>
+              </div>
+              <div className="metric-card" data-testid="metric-prs-opened">
+                <span className="metric-value">{fetchState.data.ai_prs_opened}</span>
+                <span className="metric-label">AI PRs Opened</span>
+              </div>
+              <div className="metric-card" data-testid="metric-prs-merged">
+                <span className="metric-value">{fetchState.data.ai_prs_merged}</span>
+                <span className="metric-label">AI PRs Merged</span>
+              </div>
+              <div className="metric-card" data-testid="metric-prs-rejected">
+                <span className="metric-value">{fetchState.data.ai_prs_rejected_closed}</span>
+                <span className="metric-label">AI PRs Rejected / Closed</span>
+              </div>
             </div>
           </div>
         )}
@@ -117,3 +116,5 @@ export default function App() {
     </div>
   );
 }
+
+export default App;
