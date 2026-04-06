@@ -21,6 +21,7 @@ enterprise-ai-sdlc-template/
 - **Port:** 8000 (local), 8000 (Docker)
 - **Endpoints:** All under `/` or `/api/v1/` prefix
 - **No database.** All state is in-memory or read from env vars.
+- **Startup validation:** `validate_github_env()` is called at import time — the application refuses to start if `GITHUB_TOKEN` or `GITHUB_REPO` are missing (unless `SKIP_ENV_VALIDATION=1` is set).
 
 ### Frontend (`frontend/`)
 - **Runtime:** Node 20, React 18, Vite 5
@@ -48,6 +49,20 @@ Both services run as non-root users.
 - In dev: Vite proxy forwards these to `localhost:8000`
 - In production (Docker): nginx proxy forwards to `http://backend:8000`
 - No CORS configuration needed — same-origin from the browser's perspective
+
+## Backend Module Structure
+
+```
+backend/app/
+├── __init__.py
+├── main.py               # FastAPI app instance + route registration + startup validation
+├── routers/
+│   └── ai_metrics.py     # GET /api/v1/ai-metrics
+├── models/
+│   └── ai_metrics.py     # AiMetricsResponse, compute_period_range, validate_github_env
+└── services/
+    └── github_metrics.py # GitHub Search API client
+```
 
 ## AI Pipeline Topology
 
