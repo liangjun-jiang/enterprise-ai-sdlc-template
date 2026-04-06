@@ -29,6 +29,7 @@ enterprise-ai-sdlc-template/
 - **Dev port:** 3000 (Vite dev server proxies `/health` and `/api` → `localhost:8000`)
 - **Production:** Built to `dist/`, served by nginx on port 80
 - **Communicates with backend** via relative paths (`/health`, `/api/...`) — never hardcoded base URLs
+- **UI:** Metrics dashboard displaying AI pipeline activity; period selector (`this_week` / `this_month`); loading, error, and success states
 
 ## Docker Topology
 
@@ -62,6 +63,17 @@ backend/app/
 │   └── ai_metrics.py     # AiMetricsResponse, compute_period_range, validate_github_env
 └── services/
     └── github_metrics.py # GitHub Search API client
+```
+
+## Frontend Module Structure
+
+```
+frontend/src/
+├── main.tsx          # React entry point
+├── App.tsx           # Root component: period selector, fetch logic, metrics display
+├── App.test.tsx      # Full test coverage for all UI states
+├── App.css           # Minimal dashboard styles (no CSS framework)
+└── setupTests.ts     # @testing-library/jest-dom import
 ```
 
 ## AI Pipeline Topology
