@@ -1,107 +1,219 @@
-* {
+/* Material Design 3 Color Tokens */
+:root {
+  --md-sys-color-primary: #6750a4;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #eaddff;
+  --md-sys-color-on-primary-container: #21005d;
+
+  --md-sys-color-secondary: #625b71;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #e8def8;
+  --md-sys-color-on-secondary-container: #1d192b;
+
+  --md-sys-color-error: #b3261e;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #f9dedc;
+  --md-sys-color-on-error-container: #410e0b;
+
+  --md-sys-color-surface: #fffbfe;
+  --md-sys-color-on-surface: #1c1b1f;
+  --md-sys-color-surface-variant: #e7e0ec;
+  --md-sys-color-on-surface-variant: #49454f;
+
+  --md-sys-color-background: #fffbfe;
+  --md-sys-color-on-background: #1c1b1f;
+
+  --md-sys-color-outline: #79747e;
+  --md-sys-color-outline-variant: #cac4d0;
+
+  --md-sys-elevation-1: 0px 1px 2px rgba(0,0,0,0.3), 0px 1px 3px 1px rgba(0,0,0,0.15);
+  --md-sys-elevation-2: 0px 1px 2px rgba(0,0,0,0.3), 0px 2px 6px 2px rgba(0,0,0,0.15);
+
+  --md-sys-typescale-display-font: 'Roboto', sans-serif;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+}
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #f5f5f5;
-  color: #1a1a1a;
+  font-family: 'Roboto', sans-serif;
+  background-color: var(--md-sys-color-background);
+  color: var(--md-sys-color-on-background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.dashboard {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 2rem 1rem;
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--md-sys-color-background);
 }
 
-.dashboard-header {
+/* Top App Bar */
+.app-bar {
+  background-color: var(--md-sys-color-surface);
+  box-shadow: var(--md-sys-elevation-1);
+  padding: 0 24px;
+  height: 64px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
-  gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
-.dashboard-header h1 {
-  font-size: 1.5rem;
-  font-weight: 600;
+.app-bar h1 {
+  font-size: 1.375rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface);
+  letter-spacing: 0;
 }
 
+/* Main Content */
+.content {
+  flex: 1;
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Period Selector */
 .period-selector {
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
 }
 
-.period-selector button {
-  padding: 0.4rem 1rem;
-  border: 1px solid #ccc;
-  background: #fff;
-  border-radius: 4px;
+.period-selector label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+  letter-spacing: 0.1px;
+}
+
+.period-selector select {
+  appearance: none;
+  background-color: var(--md-sys-color-surface-variant);
+  color: var(--md-sys-color-on-surface-variant);
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-medium);
+  padding: 10px 40px 10px 16px;
+  font-family: 'Roboto', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 400;
   cursor: pointer;
-  font-size: 0.9rem;
-  transition: background 0.15s, border-color 0.15s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%2349454f' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.2s, background-color 0.2s;
 }
 
-.period-selector button:hover {
-  background: #e8e8e8;
+.period-selector select:hover {
+  border-color: var(--md-sys-color-primary);
+  background-color: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
 }
 
-.period-selector button.active {
-  background: #1a1a1a;
-  color: #fff;
-  border-color: #1a1a1a;
+.period-selector select:focus {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+  border-width: 2px;
 }
 
+/* State Messages */
 .status-message {
-  padding: 1.5rem;
-  text-align: center;
-  color: #555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
   font-size: 1rem;
+  font-weight: 400;
+  border-radius: var(--md-sys-shape-corner-large);
+  margin-top: 16px;
+}
+
+.status-message.loading {
+  background-color: var(--md-sys-color-surface-variant);
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .status-message.error {
-  color: #c0392b;
-  background: #fdf0ee;
-  border: 1px solid #e8b4b0;
-  border-radius: 4px;
+  background-color: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
 }
 
-.period-range {
-  color: #555;
-  font-size: 0.9rem;
-  margin-bottom: 1.5rem;
-}
-
+/* Metrics Grid */
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
 }
 
+/* Metric Card — Material Design filled card */
 .metric-card {
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  padding: 1.25rem;
+  background-color: var(--md-sys-color-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-large);
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  text-align: center;
+  gap: 8px;
+  box-shadow: var(--md-sys-elevation-1);
+  transition: box-shadow 0.2s;
 }
 
-.metric-value {
-  font-size: 2rem;
-  font-weight: 700;
-  line-height: 1;
+.metric-card:hover {
+  box-shadow: var(--md-sys-elevation-2);
 }
 
-.metric-label {
-  font-size: 0.8rem;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.metric-card .metric-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+  letter-spacing: 0.1px;
+  text-transform: none;
+}
+
+.metric-card .metric-value {
+  font-size: 2.25rem;
+  font-weight: 400;
+  color: var(--md-sys-color-primary);
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+}
+
+/* Period info row */
+.period-info {
+  font-size: 0.75rem;
+  color: var(--md-sys-color-on-surface-variant);
+  margin-bottom: 16px;
+  letter-spacing: 0.4px;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .content {
+    padding: 16px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .metric-card .metric-value {
+    font-size: 1.75rem;
+  }
 }
