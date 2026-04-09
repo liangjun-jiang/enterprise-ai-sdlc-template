@@ -1,8 +1,9 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import App from './App';
 
-const mockMetricsWeek = {
+const mockMetrics = {
   period: 'this_week',
   period_start: '2024-01-15',
   period_end: '2024-01-21',
@@ -13,26 +14,13 @@ const mockMetricsWeek = {
   ai_prs_rejected_closed: 2,
 };
 
-const mockMetricsMonth = {
-  period: 'this_month',
-  period_start: '2024-01-01',
-  period_end: '2024-01-21',
-  plans_generated: 20,
-  issues_created_by_ai: 45,
-  ai_prs_opened: 30,
-  ai_prs_merged: 25,
-  ai_prs_rejected_closed: 5,
-};
-
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue({
       ok: true,
-      status: 200,
-      statusText: 'OK',
-      json: () => Promise.resolve(mockMetricsWeek),
-    }),
+      json: () => Promise.resolve(mockMetrics),
+    })
   );
 });
 
@@ -41,134 +29,101 @@ afterEach(() => {
 });
 
 describe('App', () => {
-  it('shows loading indicator while fetching', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation(
-        () => new Promise(() => { /* never resolves */ }),
-      ),
-    );
-
-    render(<App />);
-    expect(screen.getByTestId('loading-indicator')).toBeInTheDocument();
-  });
-
-  it('renders metrics on successful fetch', async () => {
-    render(<App />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('metrics-display')).toBeInTheDocument();
+  it('renders the app bar title', async () => {
+    await act(async () => {
+      render(<App />);
     });
-
-    expect(screen.getByTestId('metric-plans-generated')).toHaveTextContent('5');
-    expect(screen.getByTestId('metric-issues-created')).toHaveTextContent('12');
-    expect(screen.getByTestId('metric-prs-opened')).toHaveTextContent('8');
-    expect(screen.getByTestId('metric-prs-merged')).toHaveTextContent('6');
-    expect(screen.getByTestId('metric-prs-rejected')).toHaveTextContent('2');
-    expect(screen.getByText('2024-01-15 – 2024-01-21')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /AI Pipeline Dashboard/i })).toBeTruthy();
   });
 
-  it('calls the API with the correct default period', async () => {
+  it('shows loading state initially', () => {
     render(<App />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('metrics-display')).toBeInTheDocument();
-    });
-
-    expect(vi.mocked(fetch)).toHaveBeenCalledWith('/api/v1/ai-metrics?period=this_week');
+    expect(screen.getByTestId('loading-state')).toBeTruthy();
   });
 
-  it('shows error message on non-2xx response', async () => {
+  it('renders metrics grid after successful fetch', async () => {
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByTestId('metrics-grid')).toBeTruthy();
+    });
+  });
+
+  it('displays period info after successful fetch', async () => {
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByTestId('period-info')).toBeTruthy();
+    });
+    expect(screen.getByTestId('period-info').textContent).toContain('2024-01-15');
+    expect(screen.getByTestId('period-info').textContent).toContain('2024-01-21');
+  });
+
+  it('displays all metric values', async () => {
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByTestId('metrics-grid')).toBeTruthy();
+    });
+    expect(screen.getByText('5')).toBeTruthy();
+    expect(screen.getByText('12')).toBeTruthy();
+    expect(screen.getByText('8')).toBeTruthy();
+    expect(screen.getByText('6')).toBeTruthy();
+    expect(screen.getByText('2')).toBeTruthy();
+  });
+
+  it('shows error state when fetch fails', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
         ok: false,
         status: 502,
-        statusText: 'Bad Gateway',
-        json: () => Promise.resolve({ detail: 'GitHub API error: 502' }),
-      }),
+      })
     );
-
     render(<App />);
-
     await waitFor(() => {
-      expect(screen.getByTestId('error-message')).toBeInTheDocument();
+      expect(screen.getByTestId('error-state')).toBeTruthy();
     });
-
-    expect(screen.getByTestId('error-message')).toHaveTextContent('Request failed: 502 Bad Gateway');
+    expect(screen.getByTestId('error-state').textContent).toContain('502');
   });
 
-  it('shows error message on network failure', async () => {
+  it('shows error state when fetch throws', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockRejectedValue(new Error('Network error')),
+      vi.fn().mockRejectedValue(new Error('Network error'))
     );
-
     render(<App />);
-
     await waitFor(() => {
-      expect(screen.getByTestId('error-message')).toBeInTheDocument();
+      expect(screen.getByTestId('error-state')).toBeTruthy();
     });
-
-    expect(screen.getByTestId('error-message')).toHaveTextContent('Network error');
+    expect(screen.getByTestId('error-state').textContent).toContain('Network error');
   });
 
-  it('switches period and refetches when month button is clicked', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        json: () => Promise.resolve(mockMetricsWeek),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        json: () => Promise.resolve(mockMetricsMonth),
-      });
+  it('period selector renders with default value', async () => {
+    await act(async () => {
+      render(<App />);
+    });
+    const select = screen.getByTestId('period-select') as HTMLSelectElement;
+    expect(select.value).toBe('this_week');
+  });
 
+  it('refetches metrics when period changes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ ...mockMetrics, period: 'this_month' }),
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<App />);
-
     await waitFor(() => {
-      expect(screen.getByTestId('metrics-display')).toBeInTheDocument();
+      expect(screen.getByTestId('metrics-grid')).toBeTruthy();
     });
 
-    expect(screen.getByTestId('metric-plans-generated')).toHaveTextContent('5');
-
-    fireEvent.click(screen.getByRole('button', { name: /this month/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('metric-plans-generated')).toHaveTextContent('20');
-    });
-
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/ai-metrics?period=this_week');
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/ai-metrics?period=this_month');
-  });
-
-  it('renders the period selector with both buttons', () => {
-    render(<App />);
-
-    expect(screen.getByRole('button', { name: /this week/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /this month/i })).toBeInTheDocument();
-  });
-
-  it('marks the active period button with aria-pressed', async () => {
-    render(<App />);
-
-    const weekButton = screen.getByRole('button', { name: /this week/i });
-    const monthButton = screen.getByRole('button', { name: /this month/i });
-
-    expect(weekButton).toHaveAttribute('aria-pressed', 'true');
-    expect(monthButton).toHaveAttribute('aria-pressed', 'false');
-
-    fireEvent.click(monthButton);
+    const select = screen.getByTestId('period-select');
+    await userEvent.selectOptions(select, 'this_month');
 
     await waitFor(() => {
-      expect(monthButton).toHaveAttribute('aria-pressed', 'true');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
-    expect(weekButton).toHaveAttribute('aria-pressed', 'false');
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/ai-metrics?period=this_month'
+    );
   });
 });

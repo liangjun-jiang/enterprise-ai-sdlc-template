@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import './App.css';
 
 type Period = 'this_week' | 'this_month';
@@ -14,107 +14,101 @@ type AiMetrics = {
   ai_prs_rejected_closed: number;
 };
 
-type FetchState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'success'; data: AiMetrics }
-  | { status: 'error'; message: string };
+type MetricCardProps = {
+  label: string;
+  value: number;
+};
 
-function App() {
+function MetricCard({ label, value }: MetricCardProps) {
+  return (
+    <div className="metric-card">
+      <span className="metric-label">{label}</span>
+      <span className="metric-value">{value}</span>
+    </div>
+  );
+}
+
+export default function App() {
   const [period, setPeriod] = useState<Period>('this_week');
-  const [fetchState, setFetchState] = useState<FetchState>({ status: 'idle' });
+  const [metrics, setMetrics] = useState<AiMetrics | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchMetrics = useCallback(async (selectedPeriod: Period) => {
-    setFetchState({ status: 'loading' });
+    setLoading(true);
+    setError(null);
     try {
       const response = await fetch(`/api/v1/ai-metrics?period=${selectedPeriod}`);
       if (!response.ok) {
-        setFetchState({ status: 'error', message: `Request failed: ${response.status} ${response.statusText}` });
-        return;
+        throw new Error(`Request failed with status ${response.status}`);
       }
       const data: AiMetrics = await response.json() as AiMetrics;
-      setFetchState({ status: 'success', data });
+      setMetrics(data);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      setFetchState({ status: 'error', message });
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchMetrics(period);
+    void fetchMetrics(period);
   }, [period, fetchMetrics]);
 
-  const handlePeriodChange = useCallback((newPeriod: Period) => {
-    setPeriod(newPeriod);
-  }, []);
+  const handlePeriodChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      setPeriod(e.target.value as Period);
+    },
+    []
+  );
 
   return (
-    <div className="dashboard">
-      <header className="dashboard-header">
-        <h1>AI Pipeline Metrics</h1>
-        <div className="period-selector" role="group" aria-label="Select time period">
-          <button
-            className={period === 'this_week' ? 'active' : ''}
-            onClick={() => handlePeriodChange('this_week')}
-            aria-pressed={period === 'this_week'}
-          >
-            This Week
-          </button>
-          <button
-            className={period === 'this_month' ? 'active' : ''}
-            onClick={() => handlePeriodChange('this_month')}
-            aria-pressed={period === 'this_month'}
-          >
-            This Month
-          </button>
-        </div>
+    <div className="app">
+      <header className="app-bar">
+        <h1>AI Pipeline Dashboard</h1>
       </header>
 
-      <main>
-        {fetchState.status === 'loading' && (
-          <div className="status-message" data-testid="loading-indicator">
+      <main className="content">
+        <div className="period-selector">
+          <label htmlFor="period-select">Time period</label>
+          <select
+            id="period-select"
+            value={period}
+            onChange={handlePeriodChange}
+            data-testid="period-select"
+          >
+            <option value="this_week">This Week</option>
+            <option value="this_month">This Month</option>
+          </select>
+        </div>
+
+        {loading && (
+          <div className="status-message loading" data-testid="loading-state">
             Loading metrics…
           </div>
         )}
 
-        {fetchState.status === 'error' && (
-          <div className="status-message error" data-testid="error-message" role="alert">
-            {fetchState.message}
+        {!loading && error && (
+          <div className="status-message error" data-testid="error-state">
+            {error}
           </div>
         )}
 
-        {fetchState.status === 'success' && (
-          <div data-testid="metrics-display">
-            <p className="period-range">
-              {fetchState.data.period_start} – {fetchState.data.period_end}
+        {!loading && !error && metrics && (
+          <>
+            <p className="period-info" data-testid="period-info">
+              {metrics.period_start} – {metrics.period_end}
             </p>
-            <div className="metrics-grid">
-              <div className="metric-card" data-testid="metric-plans-generated">
-                <span className="metric-value">{fetchState.data.plans_generated}</span>
-                <span className="metric-label">Plans Generated</span>
-              </div>
-              <div className="metric-card" data-testid="metric-issues-created">
-                <span className="metric-value">{fetchState.data.issues_created_by_ai}</span>
-                <span className="metric-label">Issues Created by AI</span>
-              </div>
-              <div className="metric-card" data-testid="metric-prs-opened">
-                <span className="metric-value">{fetchState.data.ai_prs_opened}</span>
-                <span className="metric-label">AI PRs Opened</span>
-              </div>
-              <div className="metric-card" data-testid="metric-prs-merged">
-                <span className="metric-value">{fetchState.data.ai_prs_merged}</span>
-                <span className="metric-label">AI PRs Merged</span>
-              </div>
-              <div className="metric-card" data-testid="metric-prs-rejected">
-                <span className="metric-value">{fetchState.data.ai_prs_rejected_closed}</span>
-                <span className="metric-label">AI PRs Rejected / Closed</span>
-              </div>
+            <div className="metrics-grid" data-testid="metrics-grid">
+              <MetricCard label="Plans Generated" value={metrics.plans_generated} />
+              <MetricCard label="Issues Created by AI" value={metrics.issues_created_by_ai} />
+              <MetricCard label="AI PRs Opened" value={metrics.ai_prs_opened} />
+              <MetricCard label="AI PRs Merged" value={metrics.ai_prs_merged} />
+              <MetricCard label="AI PRs Rejected/Closed" value={metrics.ai_prs_rejected_closed} />
             </div>
-          </div>
+          </>
         )}
       </main>
     </div>
   );
 }
-
-export default App;
