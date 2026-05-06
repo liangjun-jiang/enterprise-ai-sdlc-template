@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [closed]
     branches: [plan]
-    paths: ["docs/plans/PLAN-*.md"]
+    paths: ["ai-sdlc-docs/plans/PLAN-*.md"]
 
 permissions:
   contents: write
@@ -25,19 +25,19 @@ jobs:
 
       - name: Validate input
         run: |
-          PLAN_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^docs/plans/PLAN-" | head -1)
+          PLAN_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^ai-sdlc-docs/plans/PLAN-" | head -1)
           if [ -z "$PLAN_FILE" ]; then
-            echo "::error::No PLAN-NNN-*.md found in merged changes under docs/plans/"
+            echo "::error::No PLAN-NNN-*.md found in merged changes under ai-sdlc-docs/plans/"
             exit 1
           fi
           echo "PLAN_FILE=$PLAN_FILE" >> "$GITHUB_ENV"
           FEATURE_SLUG=$(basename "$PLAN_FILE" .md | sed 's/^PLAN-[0-9]*-//')
           echo "FEATURE_SLUG=$FEATURE_SLUG" >> "$GITHUB_ENV"
-          echo "OUTPUT_FILE=docs/execution-plans/$FEATURE_SLUG/EXECUTION_PLAN.md" >> "$GITHUB_ENV"
+          echo "OUTPUT_FILE=ai-sdlc-docs/execution-plans/$FEATURE_SLUG/EXECUTION_PLAN.md" >> "$GITHUB_ENV"
 
       - name: Check circuit breaker
         run: |
-          ACTIVE=$(python3 -c "import json; c=json.load(open('docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
+          ACTIVE=$(python3 -c "import json; c=json.load(open('ai-sdlc-docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
           if [ "$ACTIVE" = "true" ]; then
             echo "::error::Circuit breaker is active. Set circuit_breaker_active=false to resume."
             exit 1
@@ -54,13 +54,13 @@ jobs:
           from pathlib import Path
           import sys
 
-          p = Path("docs/context/CODEBASE_OVERVIEW.md")
+          p = Path("ai-sdlc-docs/context/CODEBASE_OVERVIEW.md")
           if not p.exists():
-              print("::error::Missing docs/context/CODEBASE_OVERVIEW.md. Run post-merge housekeeping.")
+              print("::error::Missing ai-sdlc-docs/context/CODEBASE_OVERVIEW.md. Run post-merge housekeeping.")
               sys.exit(1)
           age = datetime.now(timezone.utc) - datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc)
           if age > timedelta(days=14):
-              print(f"::error::docs/context/CODEBASE_OVERVIEW.md is stale ({age.days} days old).")
+              print(f"::error::ai-sdlc-docs/context/CODEBASE_OVERVIEW.md is stale ({age.days} days old).")
               sys.exit(1)
           print(f"Context freshness OK ({age.days} days old).")
           PY
@@ -69,7 +69,7 @@ jobs:
         run: |
           uv run --project .claude/scripts python .claude/scripts/generate_execution_plan.py \
             --plan-file "$PLAN_FILE" \
-            --context-dir docs/context \
+            --context-dir ai-sdlc-docs/context \
             --output-file "$OUTPUT_FILE"
         env:
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}

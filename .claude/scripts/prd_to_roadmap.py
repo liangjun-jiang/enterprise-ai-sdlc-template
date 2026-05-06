@@ -8,15 +8,15 @@ Opens a PR to the roadmap branch for human review.
 
 Usage:
     python prd_to_roadmap.py \\
-        --prd-file docs/prd/prd-000-dashboard.md \\
+        --prd-file ai-sdlc-docs/prd/prd-000-dashboard.md \\
         --repo owner/repo-name \\
-        --context-dir docs/context
+        --context-dir ai-sdlc-docs/context
 
     # Local dry-run (no GitHub):
     python prd_to_roadmap.py \\
         --dry-run \\
-        --prd-file docs/prd/prd-000-dashboard.md \\
-        --context-dir docs/context
+        --prd-file ai-sdlc-docs/prd/prd-000-dashboard.md \\
+        --context-dir ai-sdlc-docs/context
 """
 
 from __future__ import annotations
@@ -128,7 +128,7 @@ def create_roadmap_pr(
 
     repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=base_sha)
 
-    file_path = f"docs/roadmap/{roadmap_filename}"
+    file_path = f"ai-sdlc-docs/roadmap/{roadmap_filename}"
     try:
         existing = repo.get_contents(file_path, ref=branch_name)
         repo.update_file(
@@ -183,7 +183,7 @@ def main() -> None:
     max_context = config["token_budget"]["max_context_tokens"]
     max_output = config["token_budget"]["max_output_tokens"]
 
-    existing_ms_files = list_git_tracked_files(repo_root, "docs/milestones")
+    existing_ms_files = list_git_tracked_files(repo_root, "ai-sdlc-docs/milestones")
     existing_milestones = [Path(f).stem for f in existing_ms_files if Path(f).name.startswith("milestone-")]
     if existing_milestones:
         print(f"[info] Existing milestones (will not duplicate): {existing_milestones}")
@@ -222,7 +222,7 @@ def main() -> None:
     roadmap_filename = f"ROADMAP-for-{prd_path.stem}.md"
 
     if args.local:
-        out_path = repo_root / "docs" / "roadmap" / roadmap_filename
+        out_path = repo_root / "ai-sdlc-docs" / "roadmap" / roadmap_filename
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(roadmap_content)
         print(f"[local] Written {out_path}")

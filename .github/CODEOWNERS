@@ -8,16 +8,16 @@
 # --- Docs / context layer ---
 # Tech Lead must review any changes to the AI context docs and system prompts.
 # These files directly affect the quality of all AI-generated output.
-docs/context/                   @tech-lead
-docs/schemas/                   @tech-lead
+ai-sdlc-docs/context/                   @tech-lead
+ai-sdlc-docs/schemas/                   @tech-lead
 
 # --- PRDs ---
 # Product Owner owns all product requirement documents (live on prd branch).
-docs/prd/                       @product-owner
+ai-sdlc-docs/prd/                       @product-owner
 
 # --- Roadmap / milestones ---
 # Project Manager owns milestone files.
-docs/roadmap/                   @project-manager
+ai-sdlc-docs/roadmap/                   @project-manager
 
 # --- AI pipeline scripts ---
 # Tech Lead must review changes to the scripts that call Claude and interact with GitHub.

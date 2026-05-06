@@ -7,7 +7,7 @@ Uses Claude Sonnet to extract structured issue payloads from the Markdown.
 
 Usage:
     python parse_plan_to_issues.py \\
-        --execution-plan-file docs/execution-plans/feature-000-example/EXECUTION_PLAN.md \\
+        --execution-plan-file ai-sdlc-docs/execution-plans/feature-000-example/EXECUTION_PLAN.md \\
         --repo owner/repo-name \\
         --project-id 1
 """

@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [closed]
     branches: [plan-execution]
-    paths: ["docs/execution-plans/**"]
+    paths: ["ai-sdlc-docs/execution-plans/**"]
 
 permissions:
   contents: write
@@ -25,7 +25,7 @@ jobs:
 
       - name: Validate input
         run: |
-          EXEC_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^docs/execution-plans/" | grep "EXECUTION_PLAN.md" | head -1)
+          EXEC_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^ai-sdlc-docs/execution-plans/" | grep "EXECUTION_PLAN.md" | head -1)
           if [ -z "$EXEC_FILE" ]; then
             echo "::error::No EXECUTION_PLAN.md found in merged changes."
             exit 1
@@ -34,7 +34,7 @@ jobs:
 
       - name: Check circuit breaker
         run: |
-          ACTIVE=$(python3 -c "import json; c=json.load(open('docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
+          ACTIVE=$(python3 -c "import json; c=json.load(open('ai-sdlc-docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
           if [ "$ACTIVE" = "true" ]; then
             echo "::error::Circuit breaker is active."
             exit 1
@@ -46,7 +46,7 @@ jobs:
 
       - name: Create GitHub Issues
         run: |
-          PLAN_FILE=$(echo "$EXEC_FILE" | sed 's|docs/execution-plans/|docs/plans/|' | sed 's|EXECUTION_PLAN.md|PLAN.md|')
+          PLAN_FILE=$(echo "$EXEC_FILE" | sed 's|ai-sdlc-docs/execution-plans/|ai-sdlc-docs/plans/|' | sed 's|EXECUTION_PLAN.md|PLAN.md|')
           PLAN_ARG=""
           [ -f "$PLAN_FILE" ] && PLAN_ARG="--plan-file $PLAN_FILE"
           uv run --project .claude/scripts python .claude/scripts/parse_plan_to_issues.py \

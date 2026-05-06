@@ -20,7 +20,6 @@
 | TypeScript | ^5.6.3 | `frontend/package.json` |
 | vitest | ^2.1.5 | `frontend/package.json` |
 | @testing-library/react | ^16.1.0 | `frontend/package.json` |
-| @testing-library/user-event | (latest) | `frontend/package.json` |
 | eslint | ^9.15.0 | `frontend/package.json` |
 | typescript-eslint | ^8.15.0 | `frontend/package.json` |
 | Docker base (backend) | python:3.12-slim-bookworm | `backend/Dockerfile` |
@@ -49,19 +48,12 @@
 - **Frontend:** `vite build` (outputs to `frontend/dist/`)
 - **Type check frontend:** `tsc --noEmit` (run before `vite build` in `npm run build`)
 
-## Styling
-
-The frontend uses hand-rolled **Material Design 3** CSS:
-- MD3 color tokens defined as CSS custom properties (`--md-sys-color-*`, `--md-sys-elevation-*`, `--md-sys-shape-*`) in `App.css`
-- **Roboto** font loaded from Google Fonts via `<link>` tags in `index.html`
-- No CSS framework, no component library (no Tailwind, no MUI)
-
 ## What Is NOT in This Stack
 
 - No database (no SQLAlchemy, no Alembic, no Postgres)
 - No Redis / caching layer
 - No authentication (no JWT, no OAuth)
 - No state management library (no Redux, no Zustand)
-- No CSS framework or component library (no Tailwind, no MUI — styling is hand-rolled MD3 CSS)
+- No CSS framework (no Tailwind, no MUI)
 
 When adding any of the above, update this file first.

@@ -8,9 +8,9 @@ Opens a PR to the plan branch with all generated plans.
 
 Usage:
     python milestone_to_plans.py \\
-        --milestone-file docs/milestones/milestone-001-mvp.md \\
+        --milestone-file ai-sdlc-docs/milestones/milestone-001-mvp.md \\
         --repo owner/repo-name \\
-        --context-dir docs/context
+        --context-dir ai-sdlc-docs/context
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def load_prd(prd_ref: str, repo_root: Path) -> str:
 
 
 def load_codebase_overview(repo_root: Path) -> str:
-    overview_path = repo_root / "docs" / "context" / "CODEBASE_OVERVIEW.md"
+    overview_path = repo_root / "ai-sdlc-docs" / "context" / "CODEBASE_OVERVIEW.md"
     if not overview_path.exists():
         return ""
     return f"## Current Codebase Overview\n\n{overview_path.read_text()}"
@@ -174,7 +174,7 @@ def create_plans_pr(
         slug = plan["feature_slug"]
         number = plan.get("plan_number", "000")
         content = plan["plan_content"]
-        file_path = f"docs/plans/PLAN-{number}-{slug}.md"
+        file_path = f"ai-sdlc-docs/plans/PLAN-{number}-{slug}.md"
         try:
             repo.create_file(
                 file_path,
@@ -229,12 +229,12 @@ def main() -> None:
     context_docs = load_context_docs(context_dir)
     system_prompt = MILESTONE_TO_PLANS_PROMPT
 
-    existing_plan_files = list_git_tracked_files(repo_root, "docs/plans")
+    existing_plan_files = list_git_tracked_files(repo_root, "ai-sdlc-docs/plans")
     import re as _re
     existing_slugs = [
         m.group(1)
         for f in existing_plan_files
-        if (m := _re.match(r"docs/plans/PLAN-\d+-(.+)\.md", f))
+        if (m := _re.match(r"ai-sdlc-docs/plans/PLAN-\d+-(.+)\.md", f))
     ]
     if existing_slugs:
         print(f"[info] Existing plans (will skip): {existing_slugs}")
@@ -279,7 +279,7 @@ def main() -> None:
     print(f"[info] Generated {len(plans)} plan(s)")
 
     if args.local:
-        out_dir = repo_root / "docs" / "plans"
+        out_dir = repo_root / "ai-sdlc-docs" / "plans"
         out_dir.mkdir(parents=True, exist_ok=True)
         for plan in plans:
             number = plan.get("plan_number", "000")

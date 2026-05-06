@@ -9,7 +9,7 @@ Usage:
     python write_code.py \\
         --issue-number 42 \\
         --repo owner/repo-name \\
-        --context-dir docs/context
+        --context-dir ai-sdlc-docs/context
 """
 
 from __future__ import annotations

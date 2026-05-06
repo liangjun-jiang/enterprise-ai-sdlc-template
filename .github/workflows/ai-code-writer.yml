@@ -31,7 +31,7 @@ jobs:
 
       - name: Check circuit breaker
         run: |
-          ACTIVE=$(python3 -c "import json; c=json.load(open('docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
+          ACTIVE=$(python3 -c "import json; c=json.load(open('ai-sdlc-docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
           if [ "$ACTIVE" = "true" ]; then
             echo "::error::Circuit breaker is active. Set circuit_breaker_active=false to resume."
             exit 1
@@ -48,13 +48,13 @@ jobs:
           from pathlib import Path
           import sys
 
-          p = Path("docs/context/CODEBASE_OVERVIEW.md")
+          p = Path("ai-sdlc-docs/context/CODEBASE_OVERVIEW.md")
           if not p.exists():
-              print("::error::Missing docs/context/CODEBASE_OVERVIEW.md. Run post-merge housekeeping.")
+              print("::error::Missing ai-sdlc-docs/context/CODEBASE_OVERVIEW.md. Run post-merge housekeeping.")
               sys.exit(1)
           age = datetime.now(timezone.utc) - datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc)
           if age > timedelta(days=14):
-              print(f"::error::docs/context/CODEBASE_OVERVIEW.md is stale ({age.days} days old).")
+              print(f"::error::ai-sdlc-docs/context/CODEBASE_OVERVIEW.md is stale ({age.days} days old).")
               sys.exit(1)
           print(f"Context freshness OK ({age.days} days old).")
           PY
@@ -64,7 +64,7 @@ jobs:
           uv run --project .claude/scripts python .claude/scripts/write_code.py \
             --issue-number "${{ github.event.issue.number }}" \
             --repo "${{ github.repository }}" \
-            --context-dir docs/context
+            --context-dir ai-sdlc-docs/context
         env:
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}

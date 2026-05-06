@@ -29,8 +29,7 @@ enterprise-ai-sdlc-template/
 - **Dev port:** 3000 (Vite dev server proxies `/health` and `/api` → `localhost:8000`)
 - **Production:** Built to `dist/`, served by nginx on port 80
 - **Communicates with backend** via relative paths (`/health`, `/api/...`) — never hardcoded base URLs
-- **UI:** Metrics dashboard (title: "AI Pipeline Dashboard") displaying AI pipeline activity; period selector (`this_week` / `this_month`) rendered as a `<select>` dropdown; loading, error, and success states
-- **Styling:** Hand-rolled Material Design 3 CSS using MD3 color tokens and Roboto font (via Google Fonts); no CSS framework or component library
+- **UI:** Metrics dashboard displaying AI pipeline activity; period selector (`this_week` / `this_month`); loading, error, and success states
 
 ## Docker Topology
 
@@ -73,7 +72,7 @@ frontend/src/
 ├── main.tsx          # React entry point
 ├── App.tsx           # Root component: period selector, fetch logic, metrics display
 ├── App.test.tsx      # Full test coverage for all UI states
-├── App.css           # Material Design 3 styles (hand-rolled CSS, no framework)
+├── App.css           # Minimal dashboard styles (no CSS framework)
 └── setupTests.ts     # @testing-library/jest-dom import
 ```
 

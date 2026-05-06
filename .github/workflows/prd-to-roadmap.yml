@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [closed]
     branches: [prd]
-    paths: ["docs/prd/prd-*.md"]
+    paths: ["ai-sdlc-docs/prd/prd-*.md"]
 
 permissions:
   contents: write
@@ -24,7 +24,7 @@ jobs:
 
       - name: Identify changed PRD file
         run: |
-          PRD_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^docs/prd/prd-" | head -1)
+          PRD_FILE=$(git diff --name-only HEAD~1 HEAD | grep "^ai-sdlc-docs/prd/prd-" | head -1)
           if [ -z "$PRD_FILE" ]; then
             echo "::error::No PRD file found in merged changes."
             exit 1
@@ -33,7 +33,7 @@ jobs:
 
       - name: Check circuit breaker
         run: |
-          ACTIVE=$(python3 -c "import json; c=json.load(open('docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
+          ACTIVE=$(python3 -c "import json; c=json.load(open('ai-sdlc-docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
           if [ "$ACTIVE" = "true" ]; then
             echo "::error::Circuit breaker is active."
             exit 1
@@ -50,13 +50,13 @@ jobs:
           from pathlib import Path
           import sys
 
-          p = Path("docs/context/CODEBASE_OVERVIEW.md")
+          p = Path("ai-sdlc-docs/context/CODEBASE_OVERVIEW.md")
           if not p.exists():
-              print("::error::Missing docs/context/CODEBASE_OVERVIEW.md. Run post-merge housekeeping.")
+              print("::error::Missing ai-sdlc-docs/context/CODEBASE_OVERVIEW.md. Run post-merge housekeeping.")
               sys.exit(1)
           age = datetime.now(timezone.utc) - datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc)
           if age > timedelta(days=14):
-              print(f"::error::docs/context/CODEBASE_OVERVIEW.md is stale ({age.days} days old).")
+              print(f"::error::ai-sdlc-docs/context/CODEBASE_OVERVIEW.md is stale ({age.days} days old).")
               sys.exit(1)
           print(f"Context freshness OK ({age.days} days old).")
           PY
@@ -66,7 +66,7 @@ jobs:
           uv run --project .claude/scripts python .claude/scripts/prd_to_roadmap.py \
             --prd-file "$PRD_FILE" \
             --repo "${{ github.repository }}" \
-            --context-dir docs/context
+            --context-dir ai-sdlc-docs/context
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}

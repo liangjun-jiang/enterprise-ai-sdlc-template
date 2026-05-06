@@ -7,15 +7,15 @@ milestone-NNN-*.md file per phase. Opens a PR to the roadmap branch.
 
 Usage:
     python roadmap_to_milestones.py \\
-        --roadmap-file docs/roadmap/ROADMAP.md \\
+        --roadmap-file ai-sdlc-docs/roadmap/ROADMAP.md \\
         --repo owner/repo-name \\
-        --context-dir docs/context
+        --context-dir ai-sdlc-docs/context
 
     # Local dry-run (no GitHub):
     python roadmap_to_milestones.py \\
         --dry-run \\
-        --roadmap-file docs/roadmap/ROADMAP.md \\
-        --context-dir docs/context
+        --roadmap-file ai-sdlc-docs/roadmap/ROADMAP.md \\
+        --context-dir ai-sdlc-docs/context
 """
 
 from __future__ import annotations
@@ -137,7 +137,7 @@ def create_milestones_pr(
     repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=base_sha)
 
     for m in milestones:
-        file_path = f"docs/milestones/{m['filename']}"
+        file_path = f"ai-sdlc-docs/milestones/{m['filename']}"
         try:
             repo.create_file(
                 file_path,
@@ -153,7 +153,7 @@ def create_milestones_pr(
     pr = repo.create_pull(
         title=f"Milestones: AI-generated from {roadmap_stem} ({len(milestones)} milestones)",
         body=(
-            f"AI-generated milestone files from `docs/roadmap/ROADMAP.md`.\n\n"
+            f"AI-generated milestone files from `ai-sdlc-docs/roadmap/ROADMAP.md`.\n\n"
             f"**Milestones included:**\n{milestone_list}\n\n"
             "Review each milestone file and merge. Each merged milestone file will "
             "trigger `milestone-to-plans.yml` to generate Feature Plans."
@@ -186,7 +186,7 @@ def main() -> None:
     max_context = config["token_budget"]["max_context_tokens"]
     max_output = config["token_budget"]["max_output_tokens"]
 
-    existing_ms_files = list_git_tracked_files(repo_root, "docs/milestones")
+    existing_ms_files = list_git_tracked_files(repo_root, "ai-sdlc-docs/milestones")
     existing_milestones = [Path(f).stem for f in existing_ms_files if Path(f).name.startswith("milestone-")]
     if existing_milestones:
         print(f"[info] Existing milestones (will skip): {existing_milestones}")
@@ -221,7 +221,7 @@ def main() -> None:
     print(f"[info] Generated {len(milestones)} milestone(s)")
 
     if args.local:
-        out_dir = repo_root / "docs" / "milestones"
+        out_dir = repo_root / "ai-sdlc-docs" / "milestones"
         out_dir.mkdir(parents=True, exist_ok=True)
         for m in milestones:
             out_path = out_dir / m["filename"]

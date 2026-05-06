@@ -9,7 +9,7 @@ Usage:
     python update_context_docs.py \\
         --pr-number 17 \\
         --repo owner/repo-name \\
-        --context-dir docs/context
+        --context-dir ai-sdlc-docs/context
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ Your job is to identify which context docs need to be updated to stay accurate,
 and return the updated content.
 
 Respond with a JSON object where:
-- Keys are relative file paths (e.g. "docs/context/CURRENT_TECH_STACK.md")
+- Keys are relative file paths (e.g. "ai-sdlc-docs/context/CURRENT_TECH_STACK.md")
 - Values are the complete updated file contents (as strings)
 
 Only include files that actually need changes. If nothing needs updating, return {}.
@@ -53,11 +53,11 @@ Do not add explanatory prose — just the file contents.
 Output ONLY the JSON object. No markdown fences.
 
 Context docs you may update:
-- docs/context/ARCHITECTURE.md
-- docs/context/CURRENT_TECH_STACK.md
-- docs/context/CODING_STANDARDS.md
-- docs/context/DATA_MODELS.md
-- docs/context/API_CONTRACTS.md
+- ai-sdlc-docs/context/ARCHITECTURE.md
+- ai-sdlc-docs/context/CURRENT_TECH_STACK.md
+- ai-sdlc-docs/context/CODING_STANDARDS.md
+- ai-sdlc-docs/context/DATA_MODELS.md
+- ai-sdlc-docs/context/API_CONTRACTS.md
 
 Do NOT update SYSTEM_PROMPT_PLANNER.md, SYSTEM_PROMPT_CODER.md, SECURITY_CHECKLIST.md,
 GLOSSARY.md, or AI_PIPELINE_CONFIG.json — those require deliberate human changes.

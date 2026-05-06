@@ -312,7 +312,7 @@ def step_prd(state: dict[str, Any]) -> None:
         print(f"  {DIM}[skip] PRD already approved{R}")
         return
 
-    default_prd = state["data"].get("prd_file", "docs/prd/prd-000-dashboard.md")
+    default_prd = state["data"].get("prd_file", "ai-sdlc-docs/prd/prd-000-dashboard.md")
     entered = input(f"  Enter PRD path [default: {default_prd}]: ").strip()
     prd_rel = entered or default_prd
     prd_file = REPO_ROOT / prd_rel
@@ -351,25 +351,25 @@ def step_roadmap(state: dict[str, Any]) -> None:
         print(f"  {DIM}[skip] roadmap already approved{R}")
         return
 
-    prd_rel = state["data"].get("prd_file", "docs/prd/prd-000-dashboard.md")
+    prd_rel = state["data"].get("prd_file", "ai-sdlc-docs/prd/prd-000-dashboard.md")
     prd_stem = Path(prd_rel).stem
     m = re.match(r"prd-(\d+)-", prd_stem)
     seq = m.group(1) if m else "000"
     roadmap_name = f"roadmap-{seq}-for-{prd_stem}.md"
-    roadmap_path = REPO_ROOT / "docs" / "roadmap" / roadmap_name
-    default_path = REPO_ROOT / "docs" / "roadmap" / "ROADMAP.md"
+    roadmap_path = REPO_ROOT / "ai-sdlc-docs" / "roadmap" / roadmap_name
+    default_path = REPO_ROOT / "ai-sdlc-docs" / "roadmap" / "ROADMAP.md"
 
     header(f"STEP 3 — Roadmap  [{ROLES['project_manager']}]")
     orig, feature_branch, stashed = start_feature_branch("roadmap", "roadmap", prd_stem)
 
     if roadmap_path.exists():
         print(f"  {YELLOW}{roadmap_name} already exists — using existing file (skip LLM call).{R}")
-        print(f"  To regenerate, delete docs/roadmap/{roadmap_name} and re-run.")
+        print(f"  To regenerate, delete ai-sdlc-docs/roadmap/{roadmap_name} and re-run.")
     else:
         print(f"  Generating {roadmap_name} from {Path(prd_rel).name} ...")
         if not run_script("prd_to_roadmap.py", [
             "--prd-file", prd_rel,
-            "--context-dir", "docs/context",
+            "--context-dir", "ai-sdlc-docs/context",
             "--local",
         ]):
             restore_original_branch(orig, stashed)
@@ -383,7 +383,7 @@ def step_roadmap(state: dict[str, Any]) -> None:
             print(f"  {GREEN}✓ Renamed ROADMAP.md -> {roadmap_name}{R}")
 
     show_file(roadmap_path)
-    if not gate("project_manager", f"docs/roadmap/{roadmap_name}"):
+    if not gate("project_manager", f"ai-sdlc-docs/roadmap/{roadmap_name}"):
         restore_original_branch(orig, stashed)
         print(f"{RED}  Roadmap rejected — stopping.{R}")
         sys.exit(0)
@@ -395,13 +395,13 @@ def step_roadmap(state: dict[str, Any]) -> None:
     commit_and_merge_feature_branch(
         "roadmap",
         feature_branch,
-        [f"docs/roadmap/{roadmap_name}"],
+        [f"ai-sdlc-docs/roadmap/{roadmap_name}"],
         f"feat: AI-generated {roadmap_name} from {prd_stem}",
         ROLES["project_manager"],
     )
     restore_original_branch(orig, stashed)
     state["completed"].append("roadmap")
-    state["data"]["roadmap_file"] = f"docs/roadmap/{roadmap_name}"
+    state["data"]["roadmap_file"] = f"ai-sdlc-docs/roadmap/{roadmap_name}"
     save_state(state)
 
 
@@ -412,23 +412,23 @@ def step_milestones(state: dict[str, Any]) -> None:
 
     header(f"STEP 4 — Milestones  [{ROLES['project_manager']}]")
     orig, feature_branch, stashed = start_feature_branch("milestone", "milestone")
-    ms_dir = REPO_ROOT / "docs" / "milestones"
+    ms_dir = REPO_ROOT / "ai-sdlc-docs" / "milestones"
     existing = sorted(ms_dir.glob("milestone-*.md"))
-    roadmap_file = state["data"].get("roadmap_file", "docs/roadmap/ROADMAP.md")
+    roadmap_file = state["data"].get("roadmap_file", "ai-sdlc-docs/roadmap/ROADMAP.md")
 
-    prd_rel = state["data"].get("prd_file", "docs/prd/prd-000-dashboard.md")
+    prd_rel = state["data"].get("prd_file", "ai-sdlc-docs/prd/prd-000-dashboard.md")
     prd_stem = Path(prd_rel).stem
 
     if existing:
         print(f"  {YELLOW}{len(existing)} milestone file(s) already exist — using them (skip LLM call).{R}")
         for f in existing:
             print(f"    • {f.name}")
-        print(f"  To regenerate, delete docs/milestones/milestone-*.md and re-run.")
+        print(f"  To regenerate, delete ai-sdlc-docs/milestones/milestone-*.md and re-run.")
     else:
         print(f"  Generating milestone files from {Path(roadmap_file).name} ...")
         if not run_script("roadmap_to_milestones.py", [
             "--roadmap-file", roadmap_file,
-            "--context-dir", "docs/context",
+            "--context-dir", "ai-sdlc-docs/context",
             "--local",
         ]):
             restore_original_branch(orig, stashed)
@@ -456,7 +456,7 @@ def step_milestones(state: dict[str, Any]) -> None:
     for f in existing:
         show_file(f, max_lines=30)
 
-    if not gate("project_manager", f"{len(existing)} milestone file(s) in docs/milestones/"):
+    if not gate("project_manager", f"{len(existing)} milestone file(s) in ai-sdlc-docs/milestones/"):
         restore_original_branch(orig, stashed)
         print(f"{RED}  Milestones rejected — stopping.{R}")
         sys.exit(0)
@@ -464,7 +464,7 @@ def step_milestones(state: dict[str, Any]) -> None:
     changed_paths: list[str] = []
     for f in existing:
         f.write_text(stamp_approval_frontmatter(f.read_text(), ROLES["project_manager"]))
-        changed_paths.append(f"docs/milestones/{f.name}")
+        changed_paths.append(f"ai-sdlc-docs/milestones/{f.name}")
     print(f"  {GREEN}✓ Stamped approver + approved_at: {ROLES['project_manager']}{R}")
 
     commit_and_merge_feature_branch(
@@ -487,22 +487,22 @@ def step_plans(state: dict[str, Any]) -> None:
 
     header(f"STEP 5 — Feature Plans  [{ROLES['tech_lead']}]")
     orig, feature_branch, stashed = start_feature_branch("plan", "plan")
-    plans_dir = REPO_ROOT / "docs" / "plans"
+    plans_dir = REPO_ROOT / "ai-sdlc-docs" / "plans"
     existing = sorted(plans_dir.glob("PLAN-[0-9]*.md")) + sorted(plans_dir.glob("plan-[0-9]*-for-*.md"))
 
     if existing:
         print(f"  {YELLOW}{len(existing)} plan file(s) already exist — using them (skip LLM call).{R}")
         for f in existing:
             print(f"    • {f.name}")
-        print(f"  To regenerate, delete docs/plans/plan-*.md (or legacy PLAN-*.md) and re-run.")
+        print(f"  To regenerate, delete ai-sdlc-docs/plans/plan-*.md (or legacy PLAN-*.md) and re-run.")
     else:
         ms_files = state["data"].get("milestone_files") or \
-            [f.name for f in sorted((REPO_ROOT / "docs" / "milestones").glob("milestone-*.md"))]
+            [f.name for f in sorted((REPO_ROOT / "ai-sdlc-docs" / "milestones").glob("milestone-*.md"))]
         for ms_name in ms_files:
             print(f"\n  Generating plans from {ms_name} ...")
             run_script("milestone_to_plans.py", [
-                "--milestone-file", f"docs/milestones/{ms_name}",
-                "--context-dir", "docs/context",
+                "--milestone-file", f"ai-sdlc-docs/milestones/{ms_name}",
+                "--context-dir", "ai-sdlc-docs/context",
                 "--local",
             ])
         existing = sorted(plans_dir.glob("PLAN-[0-9]*.md")) + sorted(plans_dir.glob("plan-[0-9]*-for-*.md"))
@@ -527,7 +527,7 @@ def step_plans(state: dict[str, Any]) -> None:
     for f in existing:
         show_file(f, max_lines=25)
 
-    if not gate("tech_lead", f"{len(existing)} feature plan(s) in docs/plans/"):
+    if not gate("tech_lead", f"{len(existing)} feature plan(s) in ai-sdlc-docs/plans/"):
         restore_original_branch(orig, stashed)
         print(f"{RED}  Plans rejected — stopping.{R}")
         sys.exit(0)
@@ -535,7 +535,7 @@ def step_plans(state: dict[str, Any]) -> None:
     changed_paths: list[str] = []
     for f in existing:
         f.write_text(stamp_approval_frontmatter(f.read_text(), ROLES["tech_lead"]))
-        changed_paths.append(f"docs/plans/{f.name}")
+        changed_paths.append(f"ai-sdlc-docs/plans/{f.name}")
     print(f"  {GREEN}✓ Stamped approver + approved_at: {ROLES['tech_lead']}{R}")
 
     commit_and_merge_feature_branch(
@@ -557,9 +557,9 @@ def step_execution_plans(state: dict[str, Any]) -> None:
         return
 
     plan_files: list[str] = state["data"].get("plan_files") or \
-        [f.name for f in sorted((REPO_ROOT / "docs" / "plans").glob("plan-[0-9]*-for-*.md"))]
+        [f.name for f in sorted((REPO_ROOT / "ai-sdlc-docs" / "plans").glob("plan-[0-9]*-for-*.md"))]
     if not plan_files:
-        plan_files = [f.name for f in sorted((REPO_ROOT / "docs" / "plans").glob("PLAN-[0-9]*.md"))]
+        plan_files = [f.name for f in sorted((REPO_ROOT / "ai-sdlc-docs" / "plans").glob("PLAN-[0-9]*.md"))]
 
     header(f"STEP 6 — Execution Plans  [{ROLES['tech_lead']}]")
     orig, feature_branch, stashed = start_feature_branch("plan-execution", "plan-execution")
@@ -567,7 +567,7 @@ def step_execution_plans(state: dict[str, Any]) -> None:
     for i, name in enumerate(plan_files, 1):
         slug = parse_plan_slug(name)
         ep_name = f"execution-plan-for-{slug}.md"
-        ep = REPO_ROOT / "docs" / "execution-plans" / ep_name
+        ep = REPO_ROOT / "ai-sdlc-docs" / "execution-plans" / ep_name
         marker = f" {DIM}(exists){R}" if ep.exists() else ""
         print(f"    {i:2d}. {name}{marker}")
 
@@ -580,7 +580,7 @@ def step_execution_plans(state: dict[str, Any]) -> None:
     elif sel == "new":
         selected = [
             n for n in plan_files
-            if not (REPO_ROOT / "docs" / "execution-plans" /
+            if not (REPO_ROOT / "ai-sdlc-docs" / "execution-plans" /
                     f"execution-plan-for-{parse_plan_slug(n)}.md").exists()
         ]
     else:
@@ -598,8 +598,8 @@ def step_execution_plans(state: dict[str, Any]) -> None:
 
     for plan_name in selected:
         slug = parse_plan_slug(plan_name)
-        plan_path = f"docs/plans/{plan_name}"
-        output_path = f"docs/execution-plans/execution-plan-for-{slug}.md"
+        plan_path = f"ai-sdlc-docs/plans/{plan_name}"
+        output_path = f"ai-sdlc-docs/execution-plans/execution-plan-for-{slug}.md"
         abs_output = REPO_ROOT / output_path
 
         if abs_output.exists():
@@ -608,7 +608,7 @@ def step_execution_plans(state: dict[str, Any]) -> None:
             print(f"\n  {BOLD}Generating execution plan for '{slug}'...{R}")
             if not run_script("generate_execution_plan.py", [
                 "--plan-file", plan_path,
-                "--context-dir", "docs/context",
+                "--context-dir", "ai-sdlc-docs/context",
                 "--output-file", output_path,
             ]):
                 print(f"  {RED}  Failed for {plan_name} — skipping.{R}")
@@ -654,7 +654,7 @@ def step_issues(state: dict[str, Any]) -> None:
 
     exec_plans: list[str] = state["data"].get("execution_plans") or [
         str(p.relative_to(REPO_ROOT))
-        for p in sorted((REPO_ROOT / "docs" / "execution-plans").glob("execution-plan-for-*.md"))
+        for p in sorted((REPO_ROOT / "ai-sdlc-docs" / "execution-plans").glob("execution-plan-for-*.md"))
     ]
     exec_to_plan: dict[str, str] = state["data"].get("exec_to_plan", {})
 

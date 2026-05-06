@@ -59,7 +59,7 @@ jobs:
       - name: Check circuit breaker
         if: steps.gate.outputs.should_review == 'true'
         run: |
-          ACTIVE=$(python3 -c "import json; c=json.load(open('docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
+          ACTIVE=$(python3 -c "import json; c=json.load(open('ai-sdlc-docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
           if [ "$ACTIVE" = "true" ]; then
             echo "::error::Circuit breaker is active."
             exit 1
@@ -76,7 +76,7 @@ jobs:
           uv run --project .claude/scripts python .claude/scripts/review_code.py \
             --pr-number "${{ github.event.pull_request.number }}" \
             --repo "${{ github.repository }}" \
-            --context-dir docs/context
+            --context-dir ai-sdlc-docs/context
         env:
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}

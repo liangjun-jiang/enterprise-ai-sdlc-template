@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import anthropic
+import httpx
+from anthropic import AnthropicBedrock
 from dotenv import load_dotenv
 from github import Auth, Github
 from github.GithubException import GithubException
@@ -16,14 +18,45 @@ from github.GithubException import GithubException
 # Auto-load .env from the scripts directory if present (local dev convenience)
 load_dotenv(Path(__file__).parent / ".env")
 
+# Accept LLM_API_URL as an alias for LLM_BASE_URL (gateway / custom endpoint)
+if os.environ.get("LLM_API_URL") and not os.environ.get("LLM_BASE_URL"):
+    os.environ["LLM_BASE_URL"] = os.environ["LLM_API_URL"]
+
+
+class _AnthropicBedrockBearer(AnthropicBedrock):
+    """Bedrock with an Amazon Bedrock API key (Bearer), not SigV4 IAM."""
+
+    def __init__(self, *, bearer_token: str, aws_region: str | None = None, **kwargs: Any):
+        tok = bearer_token.strip()
+        if not tok:
+            die("Bedrock API key is empty (check AWS_BEARER_TOKEN_BEDROCK / BEDROCK_API_KEY / LLM_API_KEY)")
+        self._bedrock_bearer_token = tok
+        super().__init__(aws_region=aws_region, **kwargs)
+
+    def _prepare_request(self, request: httpx.Request) -> None:
+        request.headers["Authorization"] = f"Bearer {self._bedrock_bearer_token}"
+
+
+def _bedrock_bearer_token() -> str | None:
+    """Resolve Bedrock HTTP API key for Bearer auth (see AWS Bedrock API keys docs)."""
+    for env_name in ("AWS_BEARER_TOKEN_BEDROCK", "BEDROCK_API_KEY"):
+        v = os.environ.get(env_name)
+        if v and v.strip():
+            return v.strip()
+    if os.environ.get("LLM_PROVIDER", "").strip().lower() == "bedrock" and not os.environ.get("AWS_ACCESS_KEY_ID"):
+        v = os.environ.get("LLM_API_KEY")
+        if v and v.strip():
+            return v.strip()
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
 def load_pipeline_config(repo_root: Path) -> dict[str, Any]:
-    """Load AI_PIPELINE_CONFIG.json from docs/context/."""
-    config_path = repo_root / "docs" / "context" / "AI_PIPELINE_CONFIG.json"
+    """Load AI_PIPELINE_CONFIG.json from ai-sdlc-docs/context/."""
+    config_path = repo_root / "ai-sdlc-docs" / "context" / "AI_PIPELINE_CONFIG.json"
     if not config_path.exists():
         die(f"AI_PIPELINE_CONFIG.json not found at {config_path}")
     with config_path.open() as f:
@@ -138,18 +171,21 @@ def get_repo(gh: Github, repo_name: str) -> Any:
 #
 # Set LLM_PROVIDER to one of:
 #   - direct  : direct Anthropic API
-#   - gateway : Anthropic-compatible gateway (requires LLM_BASE_URL)
+#   - gateway : Anthropic-compatible gateway (requires LLM_BASE_URL or LLM_API_URL)
 #   - bedrock : AWS Bedrock
 #
 # Backward compatibility:
 # - If LLM_PROVIDER is unset, provider is inferred:
 #   - bedrock if LLM_PROVIDER=bedrock (legacy)
-#   - gateway if LLM_BASE_URL is set
+#   - gateway if LLM_BASE_URL or LLM_API_URL is set
 #   - otherwise direct
 #
-# Bedrock uses standard AWS credential env vars:
-#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN (optional),
-#   AWS_DEFAULT_REGION (default: us-east-1)
+# Bedrock — either:
+#   - Amazon Bedrock API key (Bearer): AWS_BEARER_TOKEN_BEDROCK (recommended), or
+#     BEDROCK_API_KEY, or LLM_API_KEY when LLM_PROVIDER=bedrock and AWS_ACCESS_KEY_ID is unset.
+#   - IAM SigV4: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN (optional), and region
+#     (AnthropicBedrock default chain / profile).
+#   Region: AWS_DEFAULT_REGION (this code defaults bedrock to us-west-2 if unset).
 #
 # Model IDs in AI_PIPELINE_CONFIG.json should use Bedrock format:
 #   anthropic.claude-opus-4-6, anthropic.claude-sonnet-4-6
@@ -162,11 +198,13 @@ def llm_provider() -> str:
     if raw:
         if raw not in {"direct", "gateway", "bedrock"}:
             die("LLM_PROVIDER must be one of: direct, gateway, bedrock")
-        if raw == "gateway" and not os.environ.get("LLM_BASE_URL"):
-            die("LLM_PROVIDER=gateway requires LLM_BASE_URL")
+        if raw == "gateway" and not (
+            os.environ.get("LLM_BASE_URL") or os.environ.get("LLM_API_URL")
+        ):
+            die("LLM_PROVIDER=gateway requires LLM_BASE_URL (or LLM_API_URL)")
         return raw
     # Backward-compatible inference when LLM_PROVIDER is not set.
-    if os.environ.get("LLM_BASE_URL"):
+    if os.environ.get("LLM_BASE_URL") or os.environ.get("LLM_API_URL"):
         return "gateway"
     return "direct"
 
@@ -175,13 +213,17 @@ def anthropic_client() -> anthropic.Anthropic | anthropic.AnthropicBedrock:
     provider = llm_provider()
     if provider == "bedrock":
         region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
-        print(f"[info] Using AWS Bedrock (region: {region})", flush=True)
-        return anthropic.AnthropicBedrock(aws_region=region)
+        bearer = _bedrock_bearer_token()
+        if bearer:
+            print(f"[info] Using AWS Bedrock (region: {region}, Bedrock API key / Bearer)", flush=True)
+            return _AnthropicBedrockBearer(bearer_token=bearer, aws_region=region)
+        print(f"[info] Using AWS Bedrock (region: {region}, IAM SigV4 / default credential chain)", flush=True)
+        return AnthropicBedrock(aws_region=region)
     else:
         api_key = os.environ.get("LLM_API_KEY")
         if not api_key:
             die("LLM_API_KEY is required for direct/gateway providers")
-        base_url = os.environ.get("LLM_BASE_URL")
+        base_url = os.environ.get("LLM_BASE_URL") or os.environ.get("LLM_API_URL")
         kwargs: dict[str, str] = {"api_key": api_key}
         if provider == "gateway" and base_url:
             kwargs["base_url"] = base_url

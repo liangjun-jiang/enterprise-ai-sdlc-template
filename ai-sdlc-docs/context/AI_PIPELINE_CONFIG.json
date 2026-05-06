@@ -34,6 +34,6 @@
     "ai_reviewed": "ai-reviewed",
     "needs_human_review": "needs-human-review"
   },
-  "context_docs_path": "docs/context",
-  "schemas_path": "docs/schemas"
+  "context_docs_path": "ai-sdlc-docs/context",
+  "schemas_path": "ai-sdlc-docs/schemas"
 }

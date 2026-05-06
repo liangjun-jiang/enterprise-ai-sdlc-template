@@ -3,7 +3,7 @@
 build_code_context.py
 
 Builds a lightweight, deterministic codebase summary for planning/coding context.
-Writes docs/context/CODEBASE_OVERVIEW.md.
+Writes ai-sdlc-docs/context/CODEBASE_OVERVIEW.md.
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def build_overview(repo_root: Path) -> str:
 
 def main() -> None:
     repo_root = find_repo_root()
-    out_path = repo_root / "docs" / "context" / "CODEBASE_OVERVIEW.md"
+    out_path = repo_root / "ai-sdlc-docs" / "context" / "CODEBASE_OVERVIEW.md"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(build_overview(repo_root))
     print(f"[info] Wrote {out_path}")

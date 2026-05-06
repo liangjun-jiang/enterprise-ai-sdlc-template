@@ -5,12 +5,24 @@ bedrock_model_api_test.py
 Minimal Bedrock Converse API test using boto3.
 Useful for validating model ID / inference profile ARN + AWS auth settings.
 
-Example:
-  uv run --project .claude/scripts python .claude/scripts/bedrock_model_api_test.py \
-    --model-id arn:aws:bedrock:us-west-2:785368447960:inference-profile/us.anthropic.claude-sonnet-4-6 \
-    --prompt "how is the weather at austin texas" \
-    --region us-west-2 \
-    --profile 785368447960_PowerUserAccess
+Auth (pick one):
+  - Amazon Bedrock API key: set AWS_BEARER_TOKEN_BEDROCK, or --api-key, or paste a key in
+    PASTE_BEDROCK_API_KEY_HERE below (boto3 uses Bearer auth; do not pass --profile).
+  - IAM: omit API key and use --profile / default credential chain.
+
+Run from repo root (boto3 comes from the .claude/scripts uv project):
+
+  uv run --project .claude/scripts python bedrock_model_api_test.py \\
+    --model-id us.anthropic.claude-3-5-haiku-20241022-v1:0 \\
+    --region us-west-2 \\
+    --api-key "$AWS_BEARER_TOKEN_BEDROCK"
+
+IAM example:
+
+  uv run --project .claude/scripts python bedrock_model_api_test.py \\
+    --model-id arn:aws:bedrock:us-west-2:ACCOUNT:inference-profile/us.anthropic.claude-sonnet-4-6 \\
+    --region us-west-2 \\
+    --profile your-profile
 """
 
 from __future__ import annotations
@@ -23,6 +35,9 @@ from typing import Any
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+
+# Paste your Amazon Bedrock API key here for quick local checks (optional).
+PASTE_BEDROCK_API_KEY_HERE = ""
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,7 +60,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--profile",
         default=os.environ.get("AWS_PROFILE"),
-        help="AWS profile name (optional, default: AWS_PROFILE/current chain)",
+        help="AWS profile name (optional; ignored when using a Bedrock API key)",
+    )
+    parser.add_argument(
+        "--api-key",
+        default="",
+        metavar="KEY",
+        help="Amazon Bedrock API key (Bearer). If empty, uses PASTE_BEDROCK_API_KEY_HERE, "
+        "then AWS_BEARER_TOKEN_BEDROCK / BEDROCK_API_KEY env vars.",
     )
     parser.add_argument(
         "--max-tokens",
@@ -82,20 +104,41 @@ def extract_text(resp: dict[str, Any]) -> str:
     return ""
 
 
+def _resolve_bedrock_api_key(args: argparse.Namespace) -> str:
+    for candidate in (
+        (args.api_key or "").strip(),
+        (PASTE_BEDROCK_API_KEY_HERE or "").strip(),
+        (os.environ.get("AWS_BEARER_TOKEN_BEDROCK") or "").strip(),
+        (os.environ.get("BEDROCK_API_KEY") or "").strip(),
+    ):
+        if candidate:
+            return candidate
+    return ""
+
+
 def main() -> None:
     args = parse_args()
 
+    api_key = _resolve_bedrock_api_key(args)
+    use_bearer = bool(api_key)
+
     print(f"[info] region   : {args.region}")
-    print(f"[info] profile  : {args.profile or '(default chain)'}")
+    print(f"[info] auth     : {'Bedrock API key (Bearer)' if use_bearer else 'IAM / profile / default chain'}")
+    if not use_bearer:
+        print(f"[info] profile  : {args.profile or '(default chain)'}")
     print(f"[info] model_id : {args.model_id}")
     print(f"[info] prompt   : {args.prompt!r}")
     print("[info] calling bedrock-runtime.converse ...", flush=True)
 
     try:
-        session_kwargs: dict[str, str] = {"region_name": args.region}
-        if args.profile:
-            session_kwargs["profile_name"] = args.profile
-        session = boto3.Session(**session_kwargs)
+        if use_bearer:
+            os.environ["AWS_BEARER_TOKEN_BEDROCK"] = api_key
+            session = boto3.Session(region_name=args.region)
+        else:
+            session_kwargs: dict[str, str] = {"region_name": args.region}
+            if args.profile:
+                session_kwargs["profile_name"] = args.profile
+            session = boto3.Session(**session_kwargs)
         client = session.client("bedrock-runtime", region_name=args.region)
 
         response = client.converse(

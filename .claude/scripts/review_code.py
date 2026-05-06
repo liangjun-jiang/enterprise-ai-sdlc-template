@@ -9,7 +9,7 @@ Usage:
     python review_code.py \\
         --pr-number 17 \\
         --repo owner/repo-name \\
-        --context-dir docs/context
+        --context-dir ai-sdlc-docs/context
 """
 
 from __future__ import annotations

@@ -7,9 +7,9 @@ produce a structured Execution Plan (EXECUTION_PLAN.md).
 
 Usage:
     python generate_execution_plan.py \\
-        --plan-file docs/plans/PLAN-000-feature-example.md \\
-        --context-dir docs/context \\
-        --output-file docs/execution-plans/feature-example/EXECUTION_PLAN.md
+        --plan-file ai-sdlc-docs/plans/PLAN-000-feature-example.md \\
+        --context-dir ai-sdlc-docs/context \\
+        --output-file ai-sdlc-docs/execution-plans/feature-example/EXECUTION_PLAN.md
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from _shared import (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate an Execution Plan from a Feature Plan using Claude Opus.")
     parser.add_argument("--plan-file", required=True, help="Path to PLAN.md")
-    parser.add_argument("--context-dir", required=True, help="Path to docs/context/")
+    parser.add_argument("--context-dir", required=True, help="Path to ai-sdlc-docs/context/")
     parser.add_argument("--output-file", required=True, help="Path to write EXECUTION_PLAN.md")
     return parser.parse_args()
 
@@ -71,7 +71,7 @@ def load_upstream_context(frontmatter: dict[str, str], repo_root: Path) -> str:
 
     milestone_id = frontmatter.get("milestone", "")
     if milestone_id and milestone_id != "ad-hoc":
-        milestones_dir = repo_root / "docs" / "milestones"
+        milestones_dir = repo_root / "ai-sdlc-docs" / "milestones"
         matches = list(milestones_dir.glob(f"{milestone_id}*.md")) if milestones_dir.exists() else []
         if matches:
             parts.append(f"## Milestone\n\n{matches[0].read_text()}")
@@ -81,7 +81,7 @@ def load_upstream_context(frontmatter: dict[str, str], repo_root: Path) -> str:
 
 
 def load_codebase_overview(repo_root: Path) -> str:
-    overview_path = repo_root / "docs" / "context" / "CODEBASE_OVERVIEW.md"
+    overview_path = repo_root / "ai-sdlc-docs" / "context" / "CODEBASE_OVERVIEW.md"
     if not overview_path.exists():
         return ""
     return overview_path.read_text()
