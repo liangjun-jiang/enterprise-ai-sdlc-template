@@ -24,7 +24,6 @@ from _shared import (
     anthropic_client,
     apply_token_budget,
     call_claude,
-    check_circuit_breaker,
     die,
     find_repo_root,
     get_repo,
@@ -67,7 +66,6 @@ def main() -> None:
     repo_root = find_repo_root()
 
     config = load_pipeline_config(repo_root)
-    check_circuit_breaker(config)
 
     gh = github_client()
     repo = get_repo(gh, args.repo)

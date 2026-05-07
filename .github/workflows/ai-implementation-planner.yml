@@ -1,0 +1,93 @@
+name: AI Implementation Planner
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  plan-issue:
+    if: >
+      (github.event_name == 'issues' && github.event.label.name == 'ready-for-implementation-plan') ||
+      (github.event_name == 'issue_comment' &&
+       contains(github.event.comment.body, '/replan') &&
+       contains(join(github.event.issue.labels.*.name, ','), 'ready-for-implementation-plan'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - uses: jdx/mise-action@v2
+
+      - name: Install script dependencies
+        run: uv sync --frozen
+        working-directory: .claude/scripts
+
+      - name: Check context freshness marker
+        run: |
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          p = Path("ai-sdlc-docs/context/CONTEXT_STATUS.json")
+          if not p.exists():
+              print("::error::Missing ai-sdlc-docs/context/CONTEXT_STATUS.json. Run post-merge housekeeping.")
+              sys.exit(1)
+          data = json.loads(p.read_text())
+          actual = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          expected = (data.get("last_refreshed_sha") or "").strip()
+          if expected != actual:
+              print(f"::error::Context stale: marker={expected} dev_head={actual}")
+              sys.exit(1)
+          print(f"Context freshness OK ({expected})")
+          PY
+
+      - name: Generate implementation plan
+        run: |
+          uv run --project .claude/scripts python .claude/scripts/generate_implementation_plan.py \
+            --issue-number "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --context-dir ai-sdlc-docs/context
+        env:
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_BEDROCK_ENDPOINT_URL: ${{ secrets.AWS_BEDROCK_ENDPOINT_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set planning review label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.payload.issue.number;
+            const current = (context.payload.issue.labels || []).map(l => l.name);
+            const toAdd = ['implementation-plan-ready-for-review'].filter(l => !current.includes(l));
+            for (const name of toAdd) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [name] });
+            }
+
+      - name: Comment on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: '❌ `ai-implementation-planner` failed. Check the [Actions run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).'
+            });

@@ -63,37 +63,21 @@ def load_pipeline_config(repo_root: Path) -> dict[str, Any]:
         return json.load(f)  # type: ignore[no-any-return]
 
 
-def check_circuit_breaker(config: dict[str, Any]) -> None:
-    """Exit non-zero if circuit breaker is active."""
-    if config.get("circuit_breaker_active", False):
-        die("Circuit breaker is ACTIVE. Set circuit_breaker_active=false in AI_PIPELINE_CONFIG.json to resume.")
-
-
 # ---------------------------------------------------------------------------
 # Context assembly
 # ---------------------------------------------------------------------------
 
-_ALWAYS_INCLUDED = ["ARCHITECTURE.md", "SECURITY_CHECKLIST.md", "CODEBASE_OVERVIEW.md"]
-
-_BACKEND_FILES = ["CODING_STANDARDS.md", "DATA_MODELS.md", "API_CONTRACTS.md", "CURRENT_TECH_STACK.md"]
-_FRONTEND_FILES = ["CODING_STANDARDS.md", "API_CONTRACTS.md", "CURRENT_TECH_STACK.md"]
+# Lean GitHub-centric defaults: keep only high-signal policy docs.
+_ALWAYS_INCLUDED = ["SECURITY_CHECKLIST.md", "CODING_STANDARDS.md"]
 
 # Fallback when no affected paths are provided
-CONTEXT_FILES = _ALWAYS_INCLUDED + _BACKEND_FILES + ["CODING_STANDARDS.md"]
+CONTEXT_FILES = list(_ALWAYS_INCLUDED)
 
 
 def context_files_for_paths(affected_paths: list[str]) -> list[str]:
-    """Return the minimal set of context doc filenames relevant to the given file paths."""
-    has_backend = any("backend/" in p for p in affected_paths)
-    has_frontend = any("frontend/" in p for p in affected_paths)
-    files = list(_ALWAYS_INCLUDED)
-    if has_backend:
-        files += _BACKEND_FILES
-    if has_frontend:
-        files += _FRONTEND_FILES
-    if not has_backend and not has_frontend:
-        files += _BACKEND_FILES  # safe default for scripts / unknown paths
-    return list(dict.fromkeys(files))  # deduplicate, preserve order
+    """Return minimal context docs. Paths kept for compatibility."""
+    _ = affected_paths
+    return list(_ALWAYS_INCLUDED)
 
 
 def load_context_docs(

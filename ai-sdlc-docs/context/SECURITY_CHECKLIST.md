@@ -15,7 +15,7 @@ Use this checklist when writing or reviewing any code in this repository.
 
 ## Environment Variables
 
-- [ ] All required env vars are documented in `API_CONTRACTS.md` or `CURRENT_TECH_STACK.md`
+- [ ] All required env vars are documented in repository docs or `.env.example`
 - [ ] Missing env vars cause a startup error (fail fast), not a runtime error later
 - [ ] Default values for env vars are safe for development, not production (e.g., `APP_ENV=development`, not `APP_ENV=production` as a default)
 
@@ -51,5 +51,4 @@ Use this checklist when writing or reviewing any code in this repository.
 
 - [ ] All AI-generated PRs pass the same CI checks as human PRs
 - [ ] AI-generated code is reviewed by a human before merging to `main`
-- [ ] The circuit breaker in `AI_PIPELINE_CONFIG.json` is checked before running any AI workflow
 - [ ] AI scripts never commit directly to `main` — always open a PR

@@ -24,7 +24,6 @@ from _shared import (
     anthropic_client,
     apply_token_budget,
     call_claude,
-    check_circuit_breaker,
     die,
     find_repo_root,
     get_repo,
@@ -53,14 +52,10 @@ Do not add explanatory prose — just the file contents.
 Output ONLY the JSON object. No markdown fences.
 
 Context docs you may update:
-- ai-sdlc-docs/context/ARCHITECTURE.md
-- ai-sdlc-docs/context/CURRENT_TECH_STACK.md
 - ai-sdlc-docs/context/CODING_STANDARDS.md
-- ai-sdlc-docs/context/DATA_MODELS.md
-- ai-sdlc-docs/context/API_CONTRACTS.md
 
-Do NOT update SYSTEM_PROMPT_PLANNER.md, SYSTEM_PROMPT_CODER.md, SECURITY_CHECKLIST.md,
-GLOSSARY.md, or AI_PIPELINE_CONFIG.json — those require deliberate human changes.
+Do NOT update SYSTEM_PROMPT_CODER.md, SECURITY_CHECKLIST.md, or AI_PIPELINE_CONFIG.json —
+those require deliberate human changes.
 """
 
 
@@ -77,7 +72,6 @@ def main() -> None:
     repo_root = find_repo_root()
 
     config = load_pipeline_config(repo_root)
-    check_circuit_breaker(config)
 
     gh = github_client()
     repo = get_repo(gh, args.repo)

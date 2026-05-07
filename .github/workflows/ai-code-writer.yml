@@ -20,51 +20,93 @@ jobs:
 
       - uses: jdx/mise-action@v2
 
-      - name: Validate issue has a body
+      - name: Validate issue thread + approved plan
         uses: actions/github-script@v7
         with:
           script: |
-            const body = context.payload.issue.body;
-            if (!body || body.trim().length < 20) {
-              core.setFailed('Issue body is empty or too short. Cannot generate code without a task description.');
+            const issue = context.payload.issue;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              per_page: 100,
+            });
+            const fullThread = [issue.body || '', ...comments.map(c => c.body || '')].join('\n\n');
+            if (!fullThread || fullThread.trim().length < 40) {
+              core.setFailed('Issue thread is too short. Add details/comments before AI coding.');
+            }
+            const planComment = comments.find(c => (c.body || '').includes('<!-- ai-implementation-plan -->'));
+            if (!planComment) {
+              core.setFailed('Missing implementation plan comment. Run `ready-for-implementation-plan` first.');
+            }
+            const planText = planComment?.body || '';
+            if (!/##\s+Ready for Coding Checklist/i.test(planText)) {
+              core.setFailed('Plan comment missing "Ready for Coding Checklist".');
+            }
+            if (/- \[ \]/.test(planText)) {
+              core.setFailed('Ready for Coding Checklist has unchecked items.');
             }
 
-      - name: Check circuit breaker
+      - name: Check context freshness marker
         run: |
-          ACTIVE=$(python3 -c "import json; c=json.load(open('ai-sdlc-docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
-          if [ "$ACTIVE" = "true" ]; then
-            echo "::error::Circuit breaker is active. Set circuit_breaker_active=false to resume."
-            exit 1
-          fi
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          p = Path("ai-sdlc-docs/context/CONTEXT_STATUS.json")
+          if not p.exists():
+              print("::error::Missing ai-sdlc-docs/context/CONTEXT_STATUS.json. Run post-merge housekeeping.")
+              sys.exit(1)
+          data = json.loads(p.read_text())
+          actual = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          expected = (data.get("last_refreshed_sha") or "").strip()
+          if expected != actual:
+              print(f"::error::Context stale: marker={expected} dev_head={actual}")
+              sys.exit(1)
+          print(f"Context freshness OK ({expected})")
+          PY
 
       - name: Install script dependencies
         run: uv sync --frozen
         working-directory: .claude/scripts
 
-      - name: Check context freshness
-        run: |
-          python3 - <<'PY'
-          from datetime import datetime, timezone, timedelta
-          from pathlib import Path
-          import sys
+      - name: Compute deterministic branch name
+        id: branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const raw = (context.payload.issue.title || 'work-item')
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, '')
+              .slice(0, 48) || 'work-item';
+            const branch = `ai/issue-${context.payload.issue.number}-${raw}`;
+            core.setOutput('name', branch);
 
-          p = Path("ai-sdlc-docs/context/CODEBASE_OVERVIEW.md")
-          if not p.exists():
-              print("::error::Missing ai-sdlc-docs/context/CODEBASE_OVERVIEW.md. Run post-merge housekeeping.")
-              sys.exit(1)
-          age = datetime.now(timezone.utc) - datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc)
-          if age > timedelta(days=14):
-              print(f"::error::ai-sdlc-docs/context/CODEBASE_OVERVIEW.md is stale ({age.days} days old).")
-              sys.exit(1)
-          print(f"Context freshness OK ({age.days} days old).")
-          PY
+      - name: Create/reset deterministic branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const branch = '${{ steps.branch.outputs.name }}';
+            const devRef = await github.rest.git.getRef({ owner, repo, ref: 'heads/dev' });
+            const sha = devRef.data.object.sha;
+            try {
+              await github.rest.git.updateRef({ owner, repo, ref: `heads/${branch}`, sha, force: true });
+            } catch (e) {
+              await github.rest.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha });
+            }
 
       - name: Generate and commit code
         run: |
           uv run --project .claude/scripts python .claude/scripts/write_code.py \
             --issue-number "${{ github.event.issue.number }}" \
             --repo "${{ github.repository }}" \
-            --context-dir ai-sdlc-docs/context
+            --context-dir ai-sdlc-docs/context \
+            --branch-name "${{ steps.branch.outputs.name }}"
         env:
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
@@ -75,6 +117,34 @@ jobs:
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           AWS_BEDROCK_ENDPOINT_URL: ${{ secrets.AWS_BEDROCK_ENDPOINT_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update issue with PR link
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.payload.issue.number;
+            const branch = '${{ steps.branch.outputs.name }}';
+            const { data: pulls } = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: `${owner}:${branch}`,
+              base: 'dev',
+              per_page: 1,
+            });
+            if (!pulls.length) {
+              core.setFailed(`No open PR found for branch ${branch}`);
+              return;
+            }
+            const pr = pulls[0];
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number,
+              body: `✅ AI code generation completed.\n\n- Branch: \`${branch}\`\n- PR: ${pr.html_url}`,
+            });
 
       - name: Comment on failure
         if: failure()

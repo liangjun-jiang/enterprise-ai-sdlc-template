@@ -30,7 +30,6 @@ from _shared import (
     anthropic_client,
     apply_token_budget,
     call_claude,
-    check_circuit_breaker,
     die,
     find_repo_root,
     get_repo,
@@ -48,6 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--issue-number", type=int, help="GitHub issue number (required unless --dry-run)")
     parser.add_argument("--repo", help="owner/repo-name (required unless --dry-run)")
     parser.add_argument("--context-dir", required=True)
+    parser.add_argument("--branch-name", default="", help="Deterministic branch name from workflow")
     # Dry-run mode: skip all GitHub operations, accept issue inline for local LLM testing
     parser.add_argument("--dry-run", action="store_true", help="Skip GitHub; print LLM response to stdout")
     parser.add_argument("--issue-title", default="Add health check endpoint", help="Issue title (dry-run only)")
@@ -127,6 +127,7 @@ def build_user_message(
     issue_title: str,
     issue_body: str,
     issue_comments_markdown: str,
+    implementation_plan_markdown: str,
     affected_files: list[str],
     repo_root: Path,
     context_docs: str,
@@ -144,6 +145,11 @@ def build_user_message(
         if issue_comments_markdown.strip()
         else "_No comments on this issue._"
     )
+    plan_section = (
+        implementation_plan_markdown.strip()
+        if implementation_plan_markdown.strip()
+        else "_No approved implementation plan found in issue thread._"
+    )
 
     message = f"""# Task to Implement
 
@@ -155,6 +161,9 @@ def build_user_message(
 
 ## Issue discussion (comments)
 {comments_section}
+
+## Approved Implementation Plan
+{plan_section}
 
 ## Current File Contents
 {files_section}
@@ -168,6 +177,21 @@ def build_user_message(
 def parse_code_response(raw: str) -> dict[str, Any]:
     """Extract JSON object from Claude's response (handles fences, prose, split blocks)."""
     return parse_llm_json_dict(raw)
+
+
+def extract_implementation_plan(issue_body: str, issue_comments_markdown: str) -> str:
+    """Extract latest planner-authored implementation plan from issue body/comments."""
+    text = f"{issue_body}\n\n{issue_comments_markdown}".strip()
+    if not text:
+        return ""
+    pattern = re.compile(
+        r"(<!--\s*ai-implementation-plan\s*-->.*?)(?=\n<!--\s*ai-implementation-plan\s*-->|$)",
+        re.IGNORECASE | re.DOTALL,
+    )
+    matches = pattern.findall(text)
+    if matches:
+        return matches[-1].strip()
+    return ""
 
 
 def apply_files_to_branch(
@@ -319,7 +343,6 @@ def main() -> None:
     repo_root = find_repo_root()
 
     config = load_pipeline_config(repo_root)
-    check_circuit_breaker(config)
 
     context_dir = Path(args.context_dir)
     system_prompt = load_system_prompt(context_dir, "SYSTEM_PROMPT_CODER.md")
@@ -328,11 +351,13 @@ def main() -> None:
     max_output = config["token_budget"]["max_output_tokens"]
 
     issue_comments_markdown = ""
+    implementation_plan_markdown = ""
 
     if args.dry_run:
         issue_title = args.issue_title
         issue_body = args.issue_body
         issue_comments_markdown = args.issue_comments or ""
+        implementation_plan_markdown = extract_implementation_plan(issue_body, issue_comments_markdown)
         print(f"[dry-run] Using inline issue: {issue_title!r}")
         if issue_comments_markdown.strip():
             print("[dry-run] Including --issue-comments in prompt.", flush=True)
@@ -343,6 +368,7 @@ def main() -> None:
         issue_title = issue.title
         issue_body = issue.body or ""
         issue_comments_markdown, n_comments = format_issue_comments(issue)
+        implementation_plan_markdown = extract_implementation_plan(issue_body, issue_comments_markdown)
         print(f"[info] Processing issue #{args.issue_number}: {issue_title}")
         if issue_comments_markdown:
             print(f"[info] Loaded {n_comments} issue comment(s) into prompt.", flush=True)
@@ -359,6 +385,7 @@ def main() -> None:
         issue_title=issue_title,
         issue_body=issue_body,
         issue_comments_markdown=issue_comments_markdown,
+        implementation_plan_markdown=implementation_plan_markdown,
         affected_files=affected_files,
         repo_root=repo_root,
         context_docs=context_docs,
@@ -398,7 +425,7 @@ def main() -> None:
             max_tokens=max_output,
         )
         result = parse_code_response(raw_response)
-    branch_name: str = result["branch_name"]
+    branch_name: str = args.branch_name.strip() or result["branch_name"]
     pr_title: str = result["pr_title"]
     pr_body: str = result["pr_body"]
     files: list[dict[str, str]] = result["files"]
@@ -432,7 +459,7 @@ def main() -> None:
             max_tokens=max_output,
         )
         repaired = parse_code_response(repair_raw)
-        branch_name = repaired["branch_name"]
+        branch_name = args.branch_name.strip() or repaired["branch_name"]
         pr_title = repaired["pr_title"]
         pr_body = repaired["pr_body"]
         files = repaired["files"]
