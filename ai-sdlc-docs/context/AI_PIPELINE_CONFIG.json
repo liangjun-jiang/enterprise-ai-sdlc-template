@@ -1,0 +1,23 @@
+{
+  "models": {
+    "planner": "anthropic.claude-sonnet-4-6",
+    "coder": "anthropic.claude-sonnet-4-6",
+    "reviewer": "anthropic.claude-sonnet-4-6",
+    "context_updater": "anthropic.claude-sonnet-4-6"
+  },
+  "token_budget": {
+    "max_context_tokens": 120000,
+    "max_output_tokens": 8192
+  },
+  "branches": {
+    "dev": "dev",
+    "main": "main"
+  },
+  "labels": {
+    "ai_generated": "ai-generated",
+    "ready_for_coding": "ready-for-ai-coding",
+    "ai_reviewed": "ai-reviewed",
+    "needs_human_review": "needs-human-review"
+  },
+  "context_docs_path": "ai-sdlc-docs/context"
+}

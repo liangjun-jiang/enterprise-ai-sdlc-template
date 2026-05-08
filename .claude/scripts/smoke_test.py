@@ -1,65 +1,31 @@
 #!/usr/bin/env python3
-"""
-smoke_test.py
+"""smoke_test.py
 
-Minimal LLM connectivity test. Sends a single prompt to Claude and prints
-the response. Use this to verify your API credentials and provider config
-before running the full pipeline scripts.
-
-Dependencies live in `.claude/scripts` (uv project). Do not use bare `python`;
-use `uv run` so anthropic and other packages resolve.
-
-Environment variables are read from the process environment. Importing `_shared`
-also loads `.claude/scripts/.env` via python-dotenv (same as other pipeline scripts).
-
-  LLM_API_KEY     — required for direct Anthropic API and for gateway mode
-  LLM_BASE_URL    — gateway / OpenAI-compatible proxy base URL (optional if unset: direct API)
-  LLM_API_URL     — alias for LLM_BASE_URL if you prefer that name
-  LLM_PROVIDER    — optional: `direct`, `gateway`, or `bedrock` (inferred from URL when unset)
-  Bedrock (API key) — LLM_PROVIDER=bedrock, AWS_DEFAULT_REGION, and one of:
-                      AWS_BEARER_TOKEN_BEDROCK (AWS name), BEDROCK_API_KEY, or LLM_API_KEY
-                      (only if AWS_ACCESS_KEY_ID is unset — avoids mixing with IAM keys)
-  Bedrock (IAM)     — LLM_PROVIDER=bedrock plus AWS_ACCESS_KEY_ID / profile / default chain
-
-From repo root:
-
-    uv run --project .claude/scripts python .claude/scripts/smoke_test.py
-
-From `.claude/scripts` (after `uv sync` if needed):
-
-    uv run python smoke_test.py
-
-Examples (direct Anthropic API):
-
-    LLM_API_KEY=sk-... uv run --project .claude/scripts python .claude/scripts/smoke_test.py
-
-Gateway (custom base URL):
-
-    LLM_API_KEY=... LLM_BASE_URL=https://your-proxy/v1 uv run --project .claude/scripts python .claude/scripts/smoke_test.py
-
-AWS Bedrock (Bedrock API key — put the key in .env as below, or export it):
-
-    LLM_PROVIDER=bedrock AWS_DEFAULT_REGION=us-west-2 AWS_BEARER_TOKEN_BEDROCK=... \\
-      uv run --project .claude/scripts python .claude/scripts/smoke_test.py
-
-    # Equivalent: BEDROCK_API_KEY=... or LLM_API_KEY=... (with LLM_PROVIDER=bedrock, no AWS_ACCESS_KEY_ID)
-
-Custom model / prompt:
-
-    LLM_API_KEY=sk-... uv run --project .claude/scripts python .claude/scripts/smoke_test.py \\
-        --model anthropic.claude-haiku-4-5-20251001 \\
-        --prompt "What is 2+2? Reply in one sentence."
+Minimal LLM connectivity test plus an optional local Issue->Plan->Code->Review
+artifact smoke run.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from _shared import anthropic_client, call_claude, find_repo_root, load_pipeline_config
+from _shared import (
+    anthropic_client,
+    call_claude,
+    find_repo_root,
+    load_context_docs,
+    load_pipeline_config,
+    load_system_prompt,
+    parse_llm_json_dict,
+)
+from generate_implementation_plan import PLAN_SYSTEM_PROMPT
+from review_code import REVIEW_SYSTEM_PROMPT
 
 
 DEFAULT_PROMPT = (
@@ -86,7 +52,84 @@ def parse_args() -> argparse.Namespace:
         default=256,
         help="Max output tokens (default: 256)",
     )
+    parser.add_argument(
+        "--issue-file",
+        default="",
+        help="Run local Issue->Plan->Code->Review smoke using this markdown issue file",
+    )
     return parser.parse_args()
+
+
+def _artifact_dir(repo_root: Path) -> Path:
+    d = repo_root / ".simulate-output" / f"smoke-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def run_local_pipeline_smoke(repo_root: Path, config: dict, issue_file: Path) -> None:
+    issue_text = issue_file.read_text()
+    out_dir = _artifact_dir(repo_root)
+    (out_dir / "01_issue.md").write_text(issue_text)
+
+    context_dir = repo_root / "ai-sdlc-docs" / "context"
+    context_docs = load_context_docs(context_dir, filenames=["CODING_STANDARDS.md", "SECURITY_CHECKLIST.md"])
+    client = anthropic_client()
+    max_output = config["token_budget"]["max_output_tokens"]
+    max_context = config["token_budget"]["max_context_tokens"]
+
+    plan_user = f"# Issue\n\n{issue_text}\n\n## Project Context\n{context_docs}"
+    plan_markdown = call_claude(
+        client=client,
+        model=config["models"]["planner"],
+        system=PLAN_SYSTEM_PROMPT,
+        user=plan_user[: max_context * 4],
+        max_tokens=max_output,
+    ).strip()
+    (out_dir / "02_implementation_plan.md").write_text(plan_markdown + "\n")
+
+    coder_system = load_system_prompt(context_dir, "SYSTEM_PROMPT_CODER.md")
+    coder_user = (
+        f"# Task to Implement\n\n## Issue\n{issue_text}\n\n"
+        f"## Approved Implementation Plan\n{plan_markdown}\n\n"
+        f"## Current File Contents\n_No affected files listed._\n\n"
+        f"## Project Context\n{context_docs}"
+    )
+    code_raw = call_claude(
+        client=client,
+        model=config["models"]["coder"],
+        system=coder_system,
+        user=coder_user[: max_context * 4],
+        max_tokens=max_output,
+    )
+    code_json = parse_llm_json_dict(code_raw)
+    (out_dir / "03_codegen.json").write_text(json.dumps(code_json, indent=2) + "\n")
+
+    files = code_json.get("files", [])
+    diff_lines = []
+    for f in files if isinstance(files, list) else []:
+        if not isinstance(f, dict):
+            continue
+        path = f.get("path", "unknown")
+        action = f.get("action", "modify")
+        content = str(f.get("content", ""))
+        diff_lines.append(f"### {path} ({action})\n```diff\n{content[:2000]}\n```")
+    review_user = (
+        f"# PR: local smoke generated PR\n\n"
+        f"## Diff\n\n{chr(10).join(diff_lines) or '_No files generated._'}\n\n"
+        f"## Coding Standards\n\n{(context_dir / 'CODING_STANDARDS.md').read_text()}\n\n"
+        f"## Security Checklist\n\n{(context_dir / 'SECURITY_CHECKLIST.md').read_text()}"
+    )
+    review_raw = call_claude(
+        client=client,
+        model=config["models"]["reviewer"],
+        system=REVIEW_SYSTEM_PROMPT,
+        user=review_user[: max_context * 4],
+        max_tokens=max_output,
+    )
+    review_json = parse_llm_json_dict(review_raw)
+    (out_dir / "04_review.json").write_text(json.dumps(review_json, indent=2) + "\n")
+
+    print(f"[smoke] Local pipeline artifacts written to: {out_dir}")
 
 
 def main() -> None:
@@ -113,6 +156,13 @@ def main() -> None:
     print(response)
     print(f"[smoke] === END ===")
     print(f"\n[smoke] OK — LLM connectivity confirmed.")
+
+    if args.issue_file:
+        issue_path = (repo_root / args.issue_file).resolve()
+        if not issue_path.exists():
+            raise SystemExit(f"[smoke] issue file not found: {issue_path}")
+        print(f"[smoke] Running local Issue->Plan->Code->Review artifact test...")
+        run_local_pipeline_smoke(repo_root, config, issue_path)
 
 
 if __name__ == "__main__":
