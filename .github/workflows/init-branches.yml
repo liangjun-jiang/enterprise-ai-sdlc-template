@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   init-branches:
@@ -22,7 +23,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          for BRANCH in prd roadmap milestone plan plan-execution dev; do
+          for BRANCH in main dev; do
             if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
               echo "[info] Branch '$BRANCH' already exists — skipping"
             else
@@ -34,3 +35,32 @@ jobs:
           done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ensure issue labels exist
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              { name: 'ready-for-implementation-plan', color: '0E8A16', description: 'Issue is ready for AI implementation planning' },
+              { name: 'implementation-plan-ready-for-review', color: '1D76DB', description: 'AI-generated implementation plan is ready for human review' },
+              { name: 'ready-for-ai-coding', color: '5319E7', description: 'Issue is approved for AI code generation' },
+            ];
+
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description,
+                });
+                core.info(`Created label: ${label.name}`);
+              } catch (error) {
+                if (error.status === 422) {
+                  core.info(`Label already exists: ${label.name}`);
+                  continue;
+                }
+                throw error;
+              }
+            }
