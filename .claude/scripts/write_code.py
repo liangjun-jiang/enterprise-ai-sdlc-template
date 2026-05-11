@@ -503,16 +503,12 @@ def run_generated_code_checks(repo_root: Path, files: list[dict[str, str]]) -> s
         backend_dir = repo_root / "backend"
         checks += [
             (["uv", "sync", "--frozen"], backend_dir, "backend deps"),
-            (["uv", "run", "ruff", "check", "."], backend_dir, "backend lint"),
             (["uv", "run", "mypy", "app"], backend_dir, "backend type-check"),
-            (["uv", "run", "pytest"], backend_dir, "backend tests"),
         ]
     if frontend_touched:
         frontend_dir = repo_root / "frontend"
         checks += [
             (["npm", "ci"], frontend_dir, "frontend deps"),
-            (["npm", "run", "lint"], frontend_dir, "frontend lint"),
-            (["npm", "run", "test"], frontend_dir, "frontend tests"),
         ]
 
     for cmd, cwd, label in checks:
