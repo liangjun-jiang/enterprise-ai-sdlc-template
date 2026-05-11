@@ -1,202 +1,154 @@
 # enterprise-ai-sdlc-template
 
-A reference implementation of a GitHub-centric AI-assisted SDLC. React frontend, FastAPI backend, and a fully automated pipeline from PRD → Milestone → Feature Plans → Execution Plans → GitHub Issues → Code PRs — all via Claude and GitHub Actions.
+This repository demonstrates a **GitHub-centric AI SDLC** where GitHub Issues are the single source of truth for review, planning, and coding automation.
 
-> **This is a template.** Clone it, fill in `docs/prd/` with your own product requirements, and the pipeline takes over from there.
-
----
-
-## Stack
-
-- **Frontend:** React 18 + TypeScript + Vite
-- **Backend:** Python 3.12 + FastAPI
-- **AI pipeline:** Claude API (Opus + Sonnet) via GitHub Actions
-- **Tooling:** mise (version management), uv (Python packages), pre-commit
+The primary goal is the workflow itself (Issue -> Review -> Labels -> Code -> PR -> Merge), not the sample app.
 
 ---
 
-## 1. Prerequisites
+## What This Repo Showcases
 
-- [mise](https://mise.jdx.dev/) — manages Python and Node versions
-- Docker + Docker Compose — for local end-to-end runs
-- A GitHub repo with Actions enabled
+- Label-driven GitHub issue lifecycle
+- Reviewer comment gate before implementation planning
+- AI-generated implementation plans written back to issue threads
+- AI code generation gated by label readiness
+- Deterministic feature branch + PR creation
+- Post-merge context freshness maintenance
 
 ---
 
-## 2. Local setup
+## Workflow at a Glance
+
+1. Create or refine a GitHub Issue
+2. Add reviewer feedback as an issue comment
+3. Add label `ready-for-implementation-plan`
+4. `ai-implementation-planner.yml` generates/updates an implementation plan comment
+5. Add label `implementation-plan-ready-for-review` for plan review
+6. Add label `ready-for-ai-coding`
+7. `ai-code-writer.yml` creates a feature branch, writes code, pushes branch, and opens/updates a PR to `dev`
+8. Merge PR to `dev`
+9. `post-merge-housekeeping.yml` refreshes context metadata
+
+See label contract: [`/.github/ISSUE_LABEL_LIFECYCLE.md`](.github/ISSUE_LABEL_LIFECYCLE.md)
+
+---
+
+## Required Labels
+
+These labels are used by the workflow:
+
+- `ready-for-implementation-plan`
+- `implementation-plan-ready-for-review`
+- `ready-for-ai-coding`
+
+### Not part of this workflow anymore
+
+- PRD documents
+- Milestones
+- Separate standalone planning artifacts outside the issue thread
+
+`init-branches.yml` bootstraps them, and also ensures `main` / `dev` branches exist.
+
+---
+
+## Key Workflows
+
+- [`/.github/workflows/ai-implementation-planner.yml`](.github/workflows/ai-implementation-planner.yml)
+  - Trigger: issue labeled `ready-for-implementation-plan` (or `/replan` comment)
+  - Reads issue thread
+  - Writes/upserts implementation plan comment
+
+- [`/.github/workflows/ai-code-writer.yml`](.github/workflows/ai-code-writer.yml)
+  - Trigger: issue labeled `ready-for-ai-coding`
+  - Verifies issue state and labels
+  - Generates code -> feature branch -> push -> PR -> issue status comment
+
+- [`/.github/workflows/post-merge-housekeeping.yml`](.github/workflows/post-merge-housekeeping.yml)
+  - Trigger: PR merged into `dev`
+  - Updates context docs/marker (`CONTEXT_STATUS.json`)
+
+---
+
+## Minimal Context Layer
+
+Current high-signal context files:
+
+- [`ai-sdlc-docs/context/SYSTEM_PROMPT_CODER.md`](ai-sdlc-docs/context/SYSTEM_PROMPT_CODER.md)
+- [`ai-sdlc-docs/context/CODING_STANDARDS.md`](ai-sdlc-docs/context/CODING_STANDARDS.md)
+- [`ai-sdlc-docs/context/SECURITY_CHECKLIST.md`](ai-sdlc-docs/context/SECURITY_CHECKLIST.md)
+- [`ai-sdlc-docs/context/AI_PIPELINE_CONFIG.json`](ai-sdlc-docs/context/AI_PIPELINE_CONFIG.json)
+- `ai-sdlc-docs/context/CONTEXT_STATUS.json` (generated/maintained by workflows)
+
+---
+
+## GitHub Setup
+
+### 1) Actions secrets
+
+Add in **Settings -> Secrets and variables -> Actions**:
+
+- `LLM_PROVIDER` (`direct`, `gateway`, or `bedrock`)
+- `LLM_API_KEY` (required for `direct`/`gateway`, or Bedrock API-key mode)
+- `LLM_BASE_URL` (if using gateway)
+- AWS credentials/region vars (if using Bedrock IAM mode)
+
+`GITHUB_TOKEN` is provided automatically by GitHub Actions.
+
+### 2) Repository Actions permissions
+
+In **Settings -> Actions -> General**:
+
+- Workflow permissions: **Read and write permissions**
+- Enable: **Allow GitHub Actions to create and approve pull requests**
+
+### 3) Branch protection (recommended)
+
+- `main`: require PR + required checks
+- `dev`: require PR + required checks
+
+---
+
+## Local Simulation (Before Running Actions)
+
+Use local scripts to validate Issue -> Review comment -> Implementation plan -> AI code generation behavior first.
+
+### Example issue input
+
+- [`local-inputs/issue-example.md`](local-inputs/issue-example.md)
+
+### Run local simulation
+
+```bash
+uv run --project .claude/scripts python .claude/scripts/simulate_pipeline.py \
+  --issue-file local-inputs/issue-example.md
+```
+
+Artifacts are written to `.simulate-output/run-<timestamp>/`:
+
+- `01_issue.md`
+- `02_implementation_plan.md`
+- `03_codegen.json`
+- `04_review.json`
+
+---
+
+## Example App (Optional)
+
+The app is included only as a demo target for the SDLC workflow.
+
+### Stack
+
+- Frontend: React + TypeScript + Vite
+- Backend: FastAPI + Python 3.12
+
+### Run locally
 
 ```bash
 mise install
 cd backend && uv sync && cd ..
 cd frontend && npm install && cd ..
-```
-
-Run locally:
-
-```bash
 docker-compose up --build
 ```
 
 - Frontend: http://localhost:3000
 - Backend: http://localhost:8000
-
----
-
-## 3. GitHub repo configuration
-
-### 3a. Secrets
-
-Go to **Settings → Secrets and variables → Actions** and add:
-
-| Secret | Required | Description |
-|--------|----------|-------------|
-| `LLM_PROVIDER` | Yes | `direct`, `gateway`, or `bedrock` |
-| `LLM_API_KEY` | Yes* | Required for `direct` and `gateway` |
-| `LLM_BASE_URL` | Yes* | Required for `gateway` (Anthropic-compatible gateway URL) |
-| `AWS_DEFAULT_REGION` | Yes* | Required for `bedrock` |
-| `AWS_ACCESS_KEY_ID` | Yes* | Required for `bedrock` if not using OIDC/role |
-| `AWS_SECRET_ACCESS_KEY` | Yes* | Required for `bedrock` if not using OIDC/role |
-| `AWS_SESSION_TOKEN` | Optional | For temporary AWS credentials |
-| `AWS_BEDROCK_ENDPOINT_URL` | Optional | Bedrock endpoint override |
-
-`GITHUB_TOKEN` is provided automatically by GitHub Actions — no setup needed.
-
-\* Required depends on selected `LLM_PROVIDER`.
-
-### 3b. Branches
-
-Push to `main` once — `init-branches.yml` automatically creates all required branches:
-
-| Branch | Purpose |
-|--------|---------|
-| `main` | Production-ready code |
-| `dev` | Integration branch — all code PRs target this |
-| `prd` | Product Requirements Documents |
-| `roadmap` | AI-generated `ROADMAP.md` |
-| `milestone` | AI-generated `milestone-*.md` files |
-| `plan` | AI-generated `PLAN-NNN-*.md` feature plans |
-| `plan-execution` | AI-generated `EXECUTION_PLAN.md` files |
-
-### 3c. Branch protection rules
-
-Configure in **Settings → Branches → Add rule** for each branch:
-
-**`main`**
-- Require a pull request before merging
-- Require status checks to pass: `Backend`, `Frontend` (from `ci.yml`)
-- Require at least 1 approving review
-- Do not allow bypassing the above settings
-
-**`dev`**
-- Require a pull request before merging
-- Require status checks to pass: `Backend`, `Frontend`
-- Allow AI-generated PRs to be approved by 1 reviewer (no self-merge)
-
-**`plan`, `plan-execution`, `roadmap`**
-- Require a pull request before merging
-- Require at least 1 approving review
-- No status checks required (these branches hold docs, not code)
-
-### 3d. Workflow permissions
-
-Enable these repository-level GitHub Actions settings:
-
-1. Go to your repository **Settings**
-2. In the left sidebar, open **Actions → General**
-3. Scroll to **Workflow permissions**
-4. Select **Read and write permissions**
-5. Check **Allow GitHub Actions to create and approve pull requests**
-6. Click **Save**
-
-These are required for the AI pipeline workflows to create branches, open PRs, and post reviews.
-
-### 3e. GitHub Project (optional but recommended)
-
-Create a Project board to visualize work across all roles:
-
-1. Go to **Projects → New project → Board**
-2. Add columns: `Backlog`, `Ready`, `In Progress`, `In Review`, `Done`
-3. Add custom fields:
-   - `Milestone` (text) — links to `docs/roadmap/` file
-   - `PRD Ref` (text) — links to `docs/prd/` file
-   - `Role` (single select): Product, Engineering, QA, Support
-4. Link the project to your repository
-5. Issues created by `parse_plan_to_issues.py` appear automatically once linked
-
----
-
-## 4. First end-to-end run
-
-Use the included `feature-000-example` to verify the full pipeline works before writing your own plans.
-
-**Step 1 — Verify CI passes**
-```bash
-cd backend && uv run pytest       # should pass
-cd frontend && npm run test       # should pass
-```
-
-**Step 2 — Push to main, confirm branches are created**
-```bash
-git push origin main
-# Wait ~30s, then check: Settings → Branches
-# dev, plan, plan-execution, roadmap should all exist
-```
-
-**Step 3 — Trigger execution plan generation**
-```bash
-git checkout plan
-git checkout -b feat/feature-000-example
-# docs/plans/PLAN-000-feature-example.md already exists in the repo
-git push origin feat/feature-000-example
-```
-Open a PR from `feat/feature-000-example` → `plan` and merge it.
-
-`plan-to-execution.yml` fires → an Execution Plan PR appears targeting `plan-execution`.
-
-**Step 4 — Review and merge the Execution Plan**
-
-Open the PR on `plan-execution`, review `docs/execution-plans/feature-000-example/EXECUTION_PLAN.md`, and merge.
-
-`execution-to-issues.yml` fires → 3 GitHub Issues are created (TASK-001, TASK-002, TASK-003).
-
-**Step 5 — Trigger AI code generation**
-
-On TASK-001, add the label `ready-for-ai-coding`.
-
-`ai-code-writer.yml` fires → a code PR opens targeting `dev`.
-
-**Step 6 — Review the AI PR**
-
-`ai-code-review.yml` fires automatically → an AI review is posted on the PR.
-
-Read the review, check the diff, approve and merge.
-
-`post-merge-housekeeping.yml` fires → TASK-001 is closed, context docs updated.
-
-Repeat Steps 5–6 for TASK-002 and TASK-003.
-
----
-
-## 5. Customising for your project
-
-1. Replace `docs/prd/prd-000-dashboard.md` with your own PRD
-2. Update `docs/context/ARCHITECTURE.md` to describe your actual architecture
-3. Update `docs/context/CURRENT_TECH_STACK.md` if you change the stack
-4. Update `docs/context/API_CONTRACTS.md` as you add endpoints
-5. Leave `docs/context/SYSTEM_PROMPT_PLANNER.md` and `SYSTEM_PROMPT_CODER.md` as-is until you find the AI making consistent mistakes — then tune them
-
----
-
-## 6. Docs
-
-| File | Purpose |
-|------|---------|
-| [`guide/TYPICAL_DAY.md`](guide/TYPICAL_DAY.md) | What each role does day-to-day |
-| [`guide/FAQ.md`](guide/FAQ.md) | Common questions |
-| [`guide/TOKEN_COST_CONSCIOUSNESS.md`](guide/TOKEN_COST_CONSCIOUSNESS.md) | How context size is managed |
-| [`docs/context/`](docs/context/) | AI context layer — architecture, standards, prompts |
-| [`docs/prd/`](docs/prd/) | Product Requirements Documents |
-| [`docs/roadmap/`](docs/roadmap/) | AI-generated roadmap (`ROADMAP.md`) |
-| [`docs/milestones/`](docs/milestones/) | AI-generated milestone files |
-| [`docs/plans/`](docs/plans/) | Feature plans (`PLAN-NNN-*.md`) |
-| [`docs/execution-plans/`](docs/execution-plans/) | AI-generated task breakdowns |
