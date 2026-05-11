@@ -28,10 +28,28 @@ from _shared import (
     load_context_docs,
     load_pipeline_config,
     load_system_prompt,
-    parse_llm_json_dict,
+    parse_llm_json_dict_prefer_keys,
 )
 from generate_implementation_plan import PLAN_SYSTEM_PROMPT
 from review_code import REVIEW_SYSTEM_PROMPT
+
+FILE_PLAN_SYSTEM_PROMPT = """\
+Return ONLY valid JSON with this exact shape:
+{
+  "files": [
+    { "path": "repo/relative/path.ext", "action": "create|modify|delete" }
+  ]
+}
+No prose. No markdown fences.
+"""
+
+FILE_CONTENT_SYSTEM_PROMPT = """\
+Return ONLY valid JSON with this exact shape:
+{
+  "content": "<full file content>"
+}
+No prose. No markdown fences.
+"""
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,6 +69,54 @@ def output_dir(repo_root: Path, custom: str) -> Path:
     else:
         out = repo_root / ".simulate-output" / f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def validate_codegen_payload(payload: dict[str, object]) -> None:
+    required = ("files",)
+    missing = [k for k in required if k not in payload]
+    if missing:
+        raise SystemExit(
+            "Codegen JSON missing required key(s): "
+            + ", ".join(missing)
+            + ". See 03_codegen.raw.txt for full model response."
+        )
+    files = payload.get("files")
+    if not isinstance(files, list) or not files:
+        raise SystemExit("Codegen JSON 'files' must be a non-empty list.")
+    for i, item in enumerate(files, start=1):
+        if not isinstance(item, dict):
+            raise SystemExit(f"Codegen JSON files[{i}] must be an object.")
+        path = str(item.get("path", "")).strip()
+        action = str(item.get("action", "")).strip().lower()
+        if not path:
+            raise SystemExit(f"Codegen JSON files[{i}] missing 'path'.")
+        if action not in {"create", "modify", "delete"}:
+            raise SystemExit(
+                f"Codegen JSON files[{i}] has invalid 'action': {action!r}. "
+                "Expected one of create|modify|delete."
+            )
+
+
+def normalize_file_plan(payload: dict[str, object]) -> list[dict[str, str]]:
+    files = payload.get("files")
+    if not isinstance(files, list) or not files:
+        raise SystemExit("File plan must contain non-empty `files` array.")
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for i, item in enumerate(files, start=1):
+        if not isinstance(item, dict):
+            raise SystemExit(f"File plan files[{i}] must be an object.")
+        path = str(item.get("path", "")).strip()
+        action = str(item.get("action", "")).strip().lower()
+        if not path:
+            raise SystemExit(f"File plan files[{i}] missing `path`.")
+        if action not in {"create", "modify", "delete"}:
+            raise SystemExit(f"File plan files[{i}] invalid action {action!r}.")
+        if path in seen:
+            continue
+        seen.add(path)
+        out.append({"path": path, "action": action})
     return out
 
 
@@ -102,14 +168,63 @@ def run() -> None:
         "## Current File Contents\n_No affected files listed._\n\n"
         f"## Project Context\n{context_docs}"
     )
-    code_raw = call_claude(
+    plan_raw = call_claude(
         client=client,
         model=config["models"]["coder"],
-        system=coder_system,
-        user=coder_user[: max_context * 4],
+        system=FILE_PLAN_SYSTEM_PROMPT,
+        user=(coder_user + "\n\nOutput only JSON with key `files` and each item with `path`,`action`.")[
+            : max_context * 4
+        ],
         max_tokens=max_output,
     )
-    code_json = parse_llm_json_dict(code_raw)
+    (out / "03_codegen.raw.txt").write_text(plan_raw)
+    try:
+        file_plan_json = parse_llm_json_dict_prefer_keys(plan_raw, preferred_keys=["files"])
+        file_plan = normalize_file_plan(file_plan_json)
+    except SystemExit:
+        print("[sim][warn] Invalid/incomplete file plan; retrying with strict JSON-only response...", flush=True)
+        repair_user = (
+            coder_user
+            + "\n\nIMPORTANT: Re-output your previous answer as valid JSON only. "
+            + "No prose, no markdown fences, no explanation. "
+            + "Top-level JSON must include key `files` (non-empty list of {path, action})."
+        )
+        repair_plan_raw = call_claude(
+            client=client,
+            model=config["models"]["coder"],
+            system=FILE_PLAN_SYSTEM_PROMPT,
+            user=repair_user[: max_context * 4],
+            max_tokens=max_output,
+        )
+        (out / "03_codegen.repair.raw.txt").write_text(repair_plan_raw)
+        file_plan_json = parse_llm_json_dict_prefer_keys(repair_plan_raw, preferred_keys=["files"])
+        file_plan = normalize_file_plan(file_plan_json)
+
+    generated_files: list[dict[str, str]] = []
+    for item in file_plan:
+        path = item["path"]
+        action = item["action"]
+        if action == "delete":
+            generated_files.append({"path": path, "action": action, "content": ""})
+            continue
+        content_user = (
+            f"{coder_user}\n\n"
+            f"## Target File\nPath: {path}\nAction: {action}\n\n"
+            "Return full final file content only in JSON."
+        )
+        content_raw = call_claude(
+            client=client,
+            model=config["models"]["coder"],
+            system=FILE_CONTENT_SYSTEM_PROMPT,
+            user=content_user[: max_context * 4],
+            max_tokens=max_output,
+        )
+        content_json = parse_llm_json_dict_prefer_keys(content_raw, preferred_keys=["content"])
+        content = str(content_json.get("content", ""))
+        generated_files.append({"path": path, "action": action, "content": content})
+
+    code_json: dict[str, object] = {"files": generated_files}
+    validate_codegen_payload(code_json)
     (out / "03_codegen.json").write_text(json.dumps(code_json, indent=2) + "\n")
     print(f"[sim] Wrote {out / '03_codegen.json'}")
 
@@ -141,7 +256,7 @@ def run() -> None:
         user=review_user[: max_context * 4],
         max_tokens=max_output,
     )
-    review_json = parse_llm_json_dict(review_raw)
+    review_json = parse_llm_json_dict_prefer_keys(review_raw)
     (out / "04_review.json").write_text(json.dumps(review_json, indent=2) + "\n")
     print(f"[sim] Wrote {out / '04_review.json'}")
     print(f"[sim] Complete: {out}")

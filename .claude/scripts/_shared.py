@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -312,6 +313,77 @@ def parse_llm_json_dict(raw: str) -> dict[str, Any]:
     if not isinstance(val, dict):
         die(f"Expected a JSON object, got {type(val).__name__}")
     return val
+
+
+def parse_llm_json_dict_prefer_keys(raw: str, preferred_keys: list[str] | None = None) -> dict[str, Any]:
+    """Parse the best JSON object from model output, preferring objects with expected keys.
+
+    This is more robust than first-match parsing when models include prose plus multiple JSON
+    fragments (e.g., a full object and nested objects). If preferred_keys are provided, the
+    candidate containing the most preferred keys is selected; ties use larger serialized size.
+    """
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    decoder = json.JSONDecoder()
+
+    def _push(obj: Any) -> None:
+        if not isinstance(obj, dict):
+            return
+        try:
+            fp = json.dumps(obj, sort_keys=True, separators=(",", ":"))
+        except Exception:
+            return
+        if fp in seen:
+            return
+        seen.add(fp)
+        candidates.append(obj)
+
+    text = _normalize_model_json_text(raw)
+    if not text:
+        die("Claude returned empty response while JSON object was expected.")
+
+    # Attempt direct full-text parse first.
+    try:
+        _push(json.loads(text))
+    except Exception:
+        pass
+
+    # Attempt fenced block parsing from raw output.
+    for m in re.finditer(r"```(?:json)?\s*([\s\S]*?)```", raw, flags=re.IGNORECASE):
+        block = m.group(1).strip()
+        if not block:
+            continue
+        try:
+            _push(json.loads(block))
+        except Exception:
+            pass
+
+    # Scan for JSON objects embedded in prose and capture all parseable candidates.
+    for i, c in enumerate(text):
+        if c != "{":
+            continue
+        try:
+            obj, _ = decoder.raw_decode(text[i:])
+        except json.JSONDecodeError:
+            continue
+        _push(obj)
+
+    if not candidates:
+        die(f"Claude returned invalid JSON object. Raw (truncated):\n{raw[:2000]!r}")
+
+    keys = preferred_keys or []
+    if keys:
+        best = max(
+            candidates,
+            key=lambda d: (
+                sum(1 for k in keys if k in d),
+                len(json.dumps(d, sort_keys=True, separators=(",", ":"))),
+            ),
+        )
+        return best
+
+    # Without key preferences, choose the richest candidate by serialized size.
+    return max(candidates, key=lambda d: len(json.dumps(d, sort_keys=True, separators=(",", ":"))))
 
 
 # ---------------------------------------------------------------------------

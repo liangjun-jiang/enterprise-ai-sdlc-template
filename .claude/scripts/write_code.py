@@ -3,7 +3,7 @@
 write_code.py
 
 Reads a GitHub Issue (title, body, comments, + affected files) and calls Claude Sonnet
-to generate code. Creates a branch, commits the files, and opens a PR.
+to generate code. Creates/resets a branch and commits files.
 
 Usage:
     python write_code.py \\
@@ -24,7 +24,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from github.GithubException import GithubException, UnknownObjectException
+from github.GithubException import UnknownObjectException
 
 from _shared import (
     anthropic_client,
@@ -37,9 +37,36 @@ from _shared import (
     load_context_docs,
     load_pipeline_config,
     load_system_prompt,
-    parse_llm_json_dict,
+    parse_llm_json_dict_prefer_keys,
     read_file_safe,
 )
+
+FILE_PLAN_SYSTEM_PROMPT = """\
+Return ONLY valid JSON with this exact shape:
+{
+  "files": [
+    { "path": "repo/relative/path.ext", "action": "create|modify|delete" }
+  ]
+}
+
+Rules:
+- No prose, no markdown fences.
+- Keep scope minimal and aligned to the implementation plan.
+- Include tests for new behavior.
+- For delete actions, only include when explicitly required.
+"""
+
+FILE_CONTENT_SYSTEM_PROMPT = """\
+Return ONLY valid JSON with this exact shape:
+{
+  "content": "<full file content>"
+}
+
+Rules:
+- No prose, no markdown fences.
+- Output full final file content for the target file.
+- Follow coding and security standards.
+"""
 
 
 def parse_args() -> argparse.Namespace:
@@ -175,8 +202,33 @@ def build_user_message(
 
 
 def parse_code_response(raw: str) -> dict[str, Any]:
-    """Extract JSON object from Claude's response (handles fences, prose, split blocks)."""
-    return parse_llm_json_dict(raw)
+    """Extract JSON object from Claude's response, preferring codegen-shaped objects."""
+    return parse_llm_json_dict_prefer_keys(
+        raw, preferred_keys=["files", "branch_name", "pr_title", "pr_body"]
+    )
+
+
+def _normalize_file_plan(result: dict[str, Any]) -> list[dict[str, str]]:
+    files_raw = result.get("files")
+    if not isinstance(files_raw, list) or not files_raw:
+        die("Model output must include a non-empty 'files' array.")
+
+    files: list[dict[str, str]] = []
+    seen_paths: set[str] = set()
+    for i, item in enumerate(files_raw, start=1):
+        if not isinstance(item, dict):
+            die(f"Model output files[{i}] is not an object.")
+        path = str(item.get("path") or "").strip()
+        action = str(item.get("action") or "").strip().lower()
+        if not path:
+            die(f"Model output files[{i}] is missing 'path'.")
+        if action not in {"create", "modify", "delete"}:
+            die(f"Model output files[{i}] has invalid 'action': {action!r}.")
+        if path in seen_paths:
+            continue
+        seen_paths.add(path)
+        files.append({"path": path, "action": action})
+    return files
 
 
 def _normalize_codegen_result(
@@ -227,12 +279,43 @@ def extract_implementation_plan(issue_body: str, issue_comments_markdown: str) -
     return ""
 
 
+def _call_json_with_repair(
+    *,
+    client: Any,
+    model: str,
+    system: str,
+    user: str,
+    max_tokens: int,
+    preferred_keys: list[str],
+    repair_suffix: str,
+) -> dict[str, Any]:
+    raw = call_claude(
+        client=client,
+        model=model,
+        system=system,
+        user=user,
+        max_tokens=max_tokens,
+    )
+    try:
+        return parse_llm_json_dict_prefer_keys(raw, preferred_keys=preferred_keys)
+    except SystemExit:
+        repaired_user = user + "\n\n" + repair_suffix
+        repaired_raw = call_claude(
+            client=client,
+            model=model,
+            system=system,
+            user=repaired_user,
+            max_tokens=max_tokens,
+        )
+        return parse_llm_json_dict_prefer_keys(repaired_raw, preferred_keys=preferred_keys)
+
+
 def apply_files_to_branch(
     repo: Any,
     branch_name: str,
     files: list[dict[str, str]],
     base_sha: str,
-    pr_title: str,
+    commit_subject: str,
 ) -> None:
     """Create or reset branch, then commit all file changes."""
     ref_name = f"heads/{branch_name}"
@@ -257,29 +340,19 @@ def apply_files_to_branch(
             except Exception:
                 pass  # file already absent
         else:
-            encoded = base64.b64encode(content.encode()).decode()
             try:
                 existing = repo.get_contents(path, ref=branch_name)
                 repo.update_file(
                     path,
-                    f"{'feat' if action == 'create' else 'fix'}: {pr_title}",
+                    f"{'feat' if action == 'create' else 'fix'}: {commit_subject}",
                     content,
                     existing.sha,
                     branch=branch_name,
                 )
             except Exception:
-                repo.create_file(path, f"feat: {pr_title}", content, branch=branch_name)
+                repo.create_file(path, f"feat: {commit_subject}", content, branch=branch_name)
 
         print(f"[info] {action}: {path}")
-
-
-def find_existing_open_pr(repo: Any, branch_name: str, base_branch: str) -> Any | None:
-    """Return an existing open PR for head branch -> base branch, if any."""
-    owner = repo.owner.login
-    pulls = repo.get_pulls(state="open", head=f"{owner}:{branch_name}", base=base_branch)
-    for pr in pulls:
-        return pr
-    return None
 
 
 def _is_backend_touched(files: list[dict[str, str]]) -> bool:
@@ -425,45 +498,101 @@ def main() -> None:
         max_context=max_context,
     )
 
-    print(f"[info] Calling {model} to generate code...", flush=True)
+    print(f"[info] Calling {model} to generate file plan...", flush=True)
     client = anthropic_client()
-    raw_response = call_claude(
+    plan_user_message = (
+        user_message
+        + "\n\nOutput only JSON with key `files` and each item containing `path` and `action`."
+    )
+    file_plan_result = _call_json_with_repair(
         client=client,
         model=model,
-        system=system_prompt,
-        user=user_message,
+        system=FILE_PLAN_SYSTEM_PROMPT,
+        user=plan_user_message,
         max_tokens=max_output,
+        preferred_keys=["files"],
+        repair_suffix=(
+            "IMPORTANT: Re-output your previous answer as valid JSON only. "
+            "No prose, no markdown fences, no explanation. "
+            "Top-level JSON must include key `files`."
+        ),
     )
+    file_plan = _normalize_file_plan(file_plan_result)
+    print(f"[info] Planned file changes: {len(file_plan)}", flush=True)
 
     if args.dry_run:
-        print("\n[dry-run] === LLM RESPONSE ===")
-        print(raw_response)
+        print("\n[dry-run] === FILE PLAN ===")
+        print(file_plan_result)
+        print("[dry-run] === END FILE PLAN ===")
+        rendered_files: list[dict[str, str]] = []
+        for file_change in file_plan:
+            path = file_change["path"]
+            action = file_change["action"]
+            if action == "delete":
+                rendered_files.append({"path": path, "action": action, "content": ""})
+                continue
+            existing_content = read_file_safe(repo_root / path)
+            file_user = (
+                f"{user_message}\n\n"
+                f"## Target File\nPath: {path}\nAction: {action}\n\n"
+                f"## Existing Content\n```\n{existing_content}\n```"
+            )
+            content_obj = _call_json_with_repair(
+                client=client,
+                model=model,
+                system=FILE_CONTENT_SYSTEM_PROMPT,
+                user=file_user,
+                max_tokens=max_output,
+                preferred_keys=["content"],
+                repair_suffix=(
+                    "IMPORTANT: Re-output as valid JSON only: "
+                    '{"content":"<full file content>"}'
+                ),
+            )
+            rendered_files.append(
+                {"path": path, "action": action, "content": str(content_obj.get("content") or "")}
+            )
+        print("\n[dry-run] === GENERATED FILES ===")
+        print({"files": rendered_files})
         print("[dry-run] === END ===")
         return
 
-    try:
-        result = parse_code_response(raw_response)
-    except SystemExit:
-        print("[warn] Invalid JSON response; retrying with strict JSON-only instruction...", flush=True)
-        repair_user_message = (
-            user_message
-            + "\n\nIMPORTANT: Re-output your previous answer as valid JSON only. "
-            + "No prose, no markdown fences, no explanation."
+    generated_files: list[dict[str, str]] = []
+    for file_change in file_plan:
+        path = file_change["path"]
+        action = file_change["action"]
+        if action == "delete":
+            generated_files.append({"path": path, "action": action, "content": ""})
+            continue
+
+        existing_content = read_file_safe(repo_root / path)
+        file_user_message = (
+            f"{user_message}\n\n"
+            f"## Target File\nPath: {path}\nAction: {action}\n\n"
+            f"## Existing Content\n```\n{existing_content}\n```"
         )
-        raw_response = call_claude(
+        content_result = _call_json_with_repair(
             client=client,
             model=model,
-            system=system_prompt,
-            user=repair_user_message,
+            system=FILE_CONTENT_SYSTEM_PROMPT,
+            user=file_user_message,
             max_tokens=max_output,
+            preferred_keys=["content"],
+            repair_suffix=(
+                "IMPORTANT: Re-output as valid JSON only: "
+                '{"content":"<full file content>"}'
+            ),
         )
-        result = parse_code_response(raw_response)
-    parsed_branch_name, pr_title, pr_body, files = _normalize_codegen_result(
-        result,
-        issue_number=args.issue_number,
-        issue_title=issue_title,
-    )
+        content = str(content_result.get("content") or "")
+        if action in {"create", "modify"} and not content.strip():
+            die(f"Model returned empty content for {action} action on {path}")
+        generated_files.append({"path": path, "action": action, "content": content})
+
+    parsed_branch_name = f"ai/issue-{args.issue_number or 'local'}-{re.sub(r'[^a-z0-9]+', '-', issue_title.lower()).strip('-')[:48] or 'work-item'}"
     branch_name: str = args.branch_name.strip() or parsed_branch_name
+    pr_title = f"Implement issue #{args.issue_number or 'local'}: {issue_title}"
+    pr_body = "Automated update generated by AI Code Writer."
+    files = generated_files
 
     # Validate generated code against CI-style checks before PR creation/update.
     def validate_files(candidate_files: list[dict[str, str]]) -> str | None:
@@ -511,28 +640,7 @@ def main() -> None:
     print(f"[info] Creating branch {branch_name!r} from {dev_branch}...")
     apply_files_to_branch(repo, branch_name, files, base_sha, pr_title)
 
-    ai_label = config["labels"]["ai_generated"]
-    existing_pr = find_existing_open_pr(repo, branch_name, dev_branch)
-    if existing_pr:
-        pr = existing_pr
-        print(f"[info] Reusing existing open PR: {pr.html_url}")
-        try:
-            pr.edit(title=pr_title, body=pr_body + f"\n\nCloses #{args.issue_number}")
-        except GithubException:
-            pass
-    else:
-        pr = repo.create_pull(
-            title=pr_title,
-            body=pr_body + f"\n\nCloses #{args.issue_number}",
-            head=branch_name,
-            base=dev_branch,
-        )
-    try:
-        pr.add_to_labels(ai_label)
-    except Exception:
-        pass
-
-    print(f"[info] PR created: {pr.html_url}")
+    print(f"[info] Code committed to branch: {branch_name}")
 
 
 if __name__ == "__main__":
