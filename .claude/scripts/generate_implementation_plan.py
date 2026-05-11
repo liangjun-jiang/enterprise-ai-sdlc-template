@@ -9,8 +9,10 @@ and upserts a single canonical planning comment on the issue.
 from __future__ import annotations
 
 import argparse
+import difflib
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,7 @@ from _shared import (
 )
 
 PLAN_MARKER = "<!-- ai-implementation-plan -->"
+MAX_DIFF_LINES = 200
 
 PLAN_SYSTEM_PROMPT = """\
 You are a senior software engineer preparing implementation plans for GitHub issues.
@@ -79,18 +82,78 @@ def format_issue_comments(issue: Any) -> str:
     return "\n\n".join(parts)
 
 
-def upsert_plan_comment(issue: Any, plan_markdown: str) -> None:
-    body = f"{PLAN_MARKER}\n\n{plan_markdown.strip()}\n"
-    existing = None
+def _strip_marker(text: str) -> str:
+    return text.replace(PLAN_MARKER, "", 1).strip()
+
+
+def _latest_plan_comment(issue: Any) -> Any | None:
+    latest = None
     for c in issue.get_comments():
         if PLAN_MARKER in (c.body or ""):
-            existing = c
-    if existing:
-        existing.edit(body)
-        print(f"[info] Updated plan comment (id={existing.id})")
-    else:
-        issue.create_comment(body)
-        print("[info] Created plan comment")
+            latest = c
+    return latest
+
+
+def _plan_version_number(issue: Any) -> int:
+    n = 0
+    for c in issue.get_comments():
+        if PLAN_MARKER in (c.body or ""):
+            n += 1
+    return n + 1
+
+
+def _build_plan_diff(previous: str, current: str) -> str:
+    diff_lines = list(
+        difflib.unified_diff(
+            previous.splitlines(),
+            current.splitlines(),
+            fromfile="before",
+            tofile="after",
+            lineterm="",
+        )
+    )
+    if not diff_lines:
+        return "_No textual changes from previous plan._"
+    trimmed = diff_lines[:MAX_DIFF_LINES]
+    clipped = len(diff_lines) > MAX_DIFF_LINES
+    header = "```diff\n" + "\n".join(trimmed)
+    if clipped:
+        header += "\n... (diff truncated)"
+    header += "\n```"
+    return header
+
+
+def create_plan_comment(issue: Any, plan_markdown: str) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    latest = _latest_plan_comment(issue)
+    version = _plan_version_number(issue)
+    normalized_new = plan_markdown.strip()
+
+    sections = [
+        PLAN_MARKER,
+        f"## AI Implementation Plan (v{version})",
+        f"_Generated at {now}_",
+        "",
+        normalized_new,
+    ]
+
+    if latest:
+        previous_text = _strip_marker(latest.body or "")
+        sections.extend(
+            [
+                "",
+                "### Plan Delta (Before vs After)",
+                "<details>",
+                "<summary>Show markdown diff from previous plan</summary>",
+                "",
+                _build_plan_diff(previous_text, normalized_new),
+                "",
+                "</details>",
+            ]
+        )
+
+    issue.create_comment("\n".join(sections).strip() + "\n")
+    print(f"[info] Created plan comment version v{version}")
 
 
 def main() -> None:
@@ -136,8 +199,8 @@ def main() -> None:
     plan_markdown = re.sub(r"^```[a-zA-Z0-9_-]*\n", "", plan_markdown)
     plan_markdown = re.sub(r"\n```$", "", plan_markdown).strip()
 
-    upsert_plan_comment(issue, plan_markdown)
-    print("[info] Implementation plan upsert complete.")
+    create_plan_comment(issue, plan_markdown)
+    print("[info] Implementation plan comment posted.")
 
 
 if __name__ == "__main__":

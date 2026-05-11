@@ -7,7 +7,7 @@ This repository uses labels to move an issue from vague requirement to AI-genera
 1. `ready-for-implementation-plan`
    - Triggers `ai-implementation-planner`.
    - Workflow reads issue body + full comment thread.
-   - Workflow upserts a canonical implementation plan comment marked with `<!-- ai-implementation-plan -->`.
+   - Workflow posts an implementation plan comment marked with `<!-- ai-implementation-plan -->`.
 
 2. `implementation-plan-ready-for-review`
    - Indicates plan is available for human review/feedback.
@@ -21,7 +21,7 @@ This repository uses labels to move an issue from vague requirement to AI-genera
 ## Replanning
 
 - Add feedback on the issue, keep `ready-for-implementation-plan`, then comment `/replan`.
-- Planner updates the existing canonical plan comment instead of posting duplicates.
+- Planner posts a new versioned plan comment and includes a markdown diff from the previous plan.
 
 ## Guardrails
 
