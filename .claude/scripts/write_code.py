@@ -310,6 +310,11 @@ def _call_json_with_repair(
         return parse_llm_json_dict_prefer_keys(repaired_raw, preferred_keys=preferred_keys)
 
 
+def _allows_empty_file(path: str) -> bool:
+    name = Path(path).name
+    return name in {"__init__.py", ".gitkeep", ".keep"}
+
+
 def apply_files_to_branch(
     repo: Any,
     branch_name: str,
@@ -585,7 +590,32 @@ def main() -> None:
         )
         content = str(content_result.get("content") or "")
         if action in {"create", "modify"} and not content.strip():
-            die(f"Model returned empty content for {action} action on {path}")
+            if _allows_empty_file(path):
+                content = ""
+            else:
+                # Semantic retry: JSON was valid, but content was empty for a file that
+                # should generally have implementation text.
+                semantic_retry_user = (
+                    file_user_message
+                    + "\n\nYour previous response had empty `content`. "
+                    + "Return non-empty full file content in JSON: "
+                    + '{"content":"<full file content>"}'
+                )
+                semantic_retry = _call_json_with_repair(
+                    client=client,
+                    model=model,
+                    system=FILE_CONTENT_SYSTEM_PROMPT,
+                    user=semantic_retry_user,
+                    max_tokens=max_output,
+                    preferred_keys=["content"],
+                    repair_suffix=(
+                        "IMPORTANT: Re-output as valid JSON only: "
+                        '{"content":"<full file content>"}'
+                    ),
+                )
+                content = str(semantic_retry.get("content") or "")
+                if not content.strip():
+                    die(f"Model returned empty content for {action} action on {path}")
         generated_files.append({"path": path, "action": action, "content": content})
 
     parsed_branch_name = f"ai/issue-{args.issue_number or 'local'}-{re.sub(r'[^a-z0-9]+', '-', issue_title.lower()).strip('-')[:48] or 'work-item'}"

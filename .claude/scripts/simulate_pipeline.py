@@ -120,6 +120,11 @@ def normalize_file_plan(payload: dict[str, object]) -> list[dict[str, str]]:
     return out
 
 
+def allows_empty_file(path: str) -> bool:
+    name = Path(path).name
+    return name in {"__init__.py", ".gitkeep", ".keep"}
+
+
 def run() -> None:
     args = parse_args()
     repo_root = find_repo_root()
@@ -221,6 +226,24 @@ def run() -> None:
         )
         content_json = parse_llm_json_dict_prefer_keys(content_raw, preferred_keys=["content"])
         content = str(content_json.get("content", ""))
+        if action in {"create", "modify"} and not content.strip() and not allows_empty_file(path):
+            retry_user = (
+                f"{content_user}\n\n"
+                'Your previous response had empty `content`. Return non-empty JSON only: {"content":"<full file content>"}'
+            )
+            retry_raw = call_claude(
+                client=client,
+                model=config["models"]["coder"],
+                system=FILE_CONTENT_SYSTEM_PROMPT,
+                user=retry_user[: max_context * 4],
+                max_tokens=max_output,
+            )
+            retry_json = parse_llm_json_dict_prefer_keys(retry_raw, preferred_keys=["content"])
+            content = str(retry_json.get("content", ""))
+            if not content.strip():
+                raise SystemExit(
+                    f"Model returned empty content for {action} action on {path}."
+                )
         generated_files.append({"path": path, "action": action, "content": content})
 
     code_json: dict[str, object] = {"files": generated_files}
