@@ -315,6 +315,81 @@ def _allows_empty_file(path: str) -> bool:
     return name in {"__init__.py", ".gitkeep", ".keep"}
 
 
+def _generate_file_contents(
+    *,
+    file_plan: list[dict[str, str]],
+    user_message: str,
+    repo_root: Path,
+    client: Any,
+    model: str,
+    max_tokens: int,
+    repair_hint: str = "",
+) -> list[dict[str, str]]:
+    generated_files: list[dict[str, str]] = []
+    for file_change in file_plan:
+        path = file_change["path"]
+        action = file_change["action"]
+        if action == "delete":
+            generated_files.append({"path": path, "action": action, "content": ""})
+            continue
+
+        existing_content = read_file_safe(repo_root / path)
+        file_user_message = (
+            f"{user_message}\n\n"
+            f"## Target File\nPath: {path}\nAction: {action}\n\n"
+            f"## Existing Content\n```\n{existing_content}\n```\n"
+        )
+        if repair_hint.strip():
+            file_user_message += (
+                "\n## CI Check Feedback\n"
+                f"{repair_hint}\n\n"
+                "Use this feedback to fix issues while preserving intended behavior.\n"
+            )
+
+        content_result = _call_json_with_repair(
+            client=client,
+            model=model,
+            system=FILE_CONTENT_SYSTEM_PROMPT,
+            user=file_user_message,
+            max_tokens=max_tokens,
+            preferred_keys=["content"],
+            repair_suffix=(
+                "IMPORTANT: Re-output as valid JSON only: "
+                '{"content":"<full file content>"}'
+            ),
+        )
+        content = str(content_result.get("content") or "")
+        if action in {"create", "modify"} and not content.strip():
+            if _allows_empty_file(path):
+                content = ""
+            else:
+                # Semantic retry: JSON was valid, but content was empty for a file that
+                # should generally have implementation text.
+                semantic_retry_user = (
+                    file_user_message
+                    + "\n\nYour previous response had empty `content`. "
+                    + "Return non-empty full file content in JSON: "
+                    + '{"content":"<full file content>"}'
+                )
+                semantic_retry = _call_json_with_repair(
+                    client=client,
+                    model=model,
+                    system=FILE_CONTENT_SYSTEM_PROMPT,
+                    user=semantic_retry_user,
+                    max_tokens=max_tokens,
+                    preferred_keys=["content"],
+                    repair_suffix=(
+                        "IMPORTANT: Re-output as valid JSON only: "
+                        '{"content":"<full file content>"}'
+                    ),
+                )
+                content = str(semantic_retry.get("content") or "")
+                if not content.strip():
+                    die(f"Model returned empty content for {action} action on {path}")
+        generated_files.append({"path": path, "action": action, "content": content})
+    return generated_files
+
+
 def apply_files_to_branch(
     repo: Any,
     branch_name: str,
@@ -529,94 +604,27 @@ def main() -> None:
         print("\n[dry-run] === FILE PLAN ===")
         print(file_plan_result)
         print("[dry-run] === END FILE PLAN ===")
-        rendered_files: list[dict[str, str]] = []
-        for file_change in file_plan:
-            path = file_change["path"]
-            action = file_change["action"]
-            if action == "delete":
-                rendered_files.append({"path": path, "action": action, "content": ""})
-                continue
-            existing_content = read_file_safe(repo_root / path)
-            file_user = (
-                f"{user_message}\n\n"
-                f"## Target File\nPath: {path}\nAction: {action}\n\n"
-                f"## Existing Content\n```\n{existing_content}\n```"
-            )
-            content_obj = _call_json_with_repair(
-                client=client,
-                model=model,
-                system=FILE_CONTENT_SYSTEM_PROMPT,
-                user=file_user,
-                max_tokens=max_output,
-                preferred_keys=["content"],
-                repair_suffix=(
-                    "IMPORTANT: Re-output as valid JSON only: "
-                    '{"content":"<full file content>"}'
-                ),
-            )
-            rendered_files.append(
-                {"path": path, "action": action, "content": str(content_obj.get("content") or "")}
-            )
+        rendered_files = _generate_file_contents(
+            file_plan=file_plan,
+            user_message=user_message,
+            repo_root=repo_root,
+            client=client,
+            model=model,
+            max_tokens=max_output,
+        )
         print("\n[dry-run] === GENERATED FILES ===")
         print({"files": rendered_files})
         print("[dry-run] === END ===")
         return
 
-    generated_files: list[dict[str, str]] = []
-    for file_change in file_plan:
-        path = file_change["path"]
-        action = file_change["action"]
-        if action == "delete":
-            generated_files.append({"path": path, "action": action, "content": ""})
-            continue
-
-        existing_content = read_file_safe(repo_root / path)
-        file_user_message = (
-            f"{user_message}\n\n"
-            f"## Target File\nPath: {path}\nAction: {action}\n\n"
-            f"## Existing Content\n```\n{existing_content}\n```"
-        )
-        content_result = _call_json_with_repair(
-            client=client,
-            model=model,
-            system=FILE_CONTENT_SYSTEM_PROMPT,
-            user=file_user_message,
-            max_tokens=max_output,
-            preferred_keys=["content"],
-            repair_suffix=(
-                "IMPORTANT: Re-output as valid JSON only: "
-                '{"content":"<full file content>"}'
-            ),
-        )
-        content = str(content_result.get("content") or "")
-        if action in {"create", "modify"} and not content.strip():
-            if _allows_empty_file(path):
-                content = ""
-            else:
-                # Semantic retry: JSON was valid, but content was empty for a file that
-                # should generally have implementation text.
-                semantic_retry_user = (
-                    file_user_message
-                    + "\n\nYour previous response had empty `content`. "
-                    + "Return non-empty full file content in JSON: "
-                    + '{"content":"<full file content>"}'
-                )
-                semantic_retry = _call_json_with_repair(
-                    client=client,
-                    model=model,
-                    system=FILE_CONTENT_SYSTEM_PROMPT,
-                    user=semantic_retry_user,
-                    max_tokens=max_output,
-                    preferred_keys=["content"],
-                    repair_suffix=(
-                        "IMPORTANT: Re-output as valid JSON only: "
-                        '{"content":"<full file content>"}'
-                    ),
-                )
-                content = str(semantic_retry.get("content") or "")
-                if not content.strip():
-                    die(f"Model returned empty content for {action} action on {path}")
-        generated_files.append({"path": path, "action": action, "content": content})
+    generated_files = _generate_file_contents(
+        file_plan=file_plan,
+        user_message=user_message,
+        repo_root=repo_root,
+        client=client,
+        model=model,
+        max_tokens=max_output,
+    )
 
     parsed_branch_name = f"ai/issue-{args.issue_number or 'local'}-{re.sub(r'[^a-z0-9]+', '-', issue_title.lower()).strip('-')[:48] or 'work-item'}"
     branch_name: str = args.branch_name.strip() or parsed_branch_name
@@ -636,29 +644,17 @@ def main() -> None:
 
     check_error = validate_files(files)
     if check_error:
-        print("[warn] Generated code failed checks; attempting one LLM repair pass...", flush=True)
-        repair_user_message = (
-            user_message
-            + "\n\nThe previous generated patch failed CI-style checks.\n"
-            + "Regenerate the FULL JSON response (all fields and full file contents) with fixes.\n"
-            + "Only output JSON.\n\n"
-            + "Failed check output (trimmed):\n"
-            + check_error
-        )
-        repair_raw = call_claude(
+        print("[warn] Generated code failed checks; attempting one 2-step repair pass...", flush=True)
+        repaired_files = _generate_file_contents(
+            file_plan=file_plan,
+            user_message=user_message,
+            repo_root=repo_root,
             client=client,
             model=model,
-            system=system_prompt,
-            user=repair_user_message,
             max_tokens=max_output,
+            repair_hint=check_error,
         )
-        repaired = parse_code_response(repair_raw)
-        parsed_branch_name, pr_title, pr_body, files = _normalize_codegen_result(
-            repaired,
-            issue_number=args.issue_number,
-            issue_title=issue_title,
-        )
-        branch_name = args.branch_name.strip() or parsed_branch_name
+        files = repaired_files
         check_error = validate_files(files)
         if check_error:
             die(f"Generated code failed checks after repair attempt.\n\n{check_error}")
