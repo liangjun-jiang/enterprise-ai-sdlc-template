@@ -44,6 +44,7 @@ jobs:
               { name: 'ready-for-implementation-plan', color: '0E8A16', description: 'Issue is ready for AI implementation planning' },
               { name: 'implementation-plan-ready-for-review', color: '1D76DB', description: 'AI-generated implementation plan is ready for human review' },
               { name: 'ready-for-ai-coding', color: '5319E7', description: 'Issue is approved for AI code generation' },
+              { name: 'ready-for-ai-review', color: 'FBCA04', description: 'PR is ready for AI code review' },
             ];
 
             for (const label of labels) {
