@@ -29,16 +29,24 @@
 - One test file per module. Test functions: `test_<behavior>_<expected_outcome>`.
 - Always use `httpx.ASGITransport(app=app)` — never the deprecated `app=` shorthand.
 - `asyncio_mode = "auto"` is set — no need for `@pytest.mark.asyncio` unless overriding loop scope.
+- Mock `httpx.AsyncClient` with `unittest.mock.AsyncMock` and `patch` — mock the `__aenter__`/`__aexit__` context manager methods.
 
 ### File Structure
 ```
 backend/app/
 ├── __init__.py       # empty
 ├── main.py           # FastAPI app instance + route registration
+├── config.py         # environment variable loading (GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO_NAME, etc.)
 ├── routers/          # one file per logical group of routes
+│   └── __init__.py
 ├── models/           # Pydantic request/response models
 └── test_<module>.py  # tests co-located with their module
 ```
+
+### Routers
+- Each logical group of endpoints lives in its own file under `app/routers/`.
+- Routers are registered in `main.py` via `app.include_router(...)`.
+- The `/api/v1` prefix is used for versioned endpoints (e.g., AI metrics); `/api` is used for unversioned endpoints (e.g., PRs).
 
 ### Anti-patterns
 - No `print()` statements in production code — use `logging`.
@@ -61,6 +69,9 @@ backend/app/
 - No inline arrow functions in JSX props that create new references on every render (use `useCallback` if needed).
 - `useEffect` must declare all dependencies in the dependency array.
 - `data-testid` attributes are the primary selector in tests — add them to interactive/observable elements.
+- Modal components must include `role="dialog"`, `aria-modal="true"`, and either `aria-label` or `aria-labelledby`.
+- Modals must handle `Escape` key to close (add/remove `keydown` listener in `useEffect`).
+- Use relative paths for all API calls — never hardcode backend URLs.
 
 ### ESLint
 - Config: `eslint.config.js` (flat config, ESLint v9)
@@ -70,9 +81,10 @@ backend/app/
 ### Tests (vitest + @testing-library/react)
 - Test file naming: `<Component>.test.tsx` co-located with component.
 - Prefer `getByRole` over `getByTestId` for accessibility-sensitive assertions.
-- Use `data-testid` for non-semantic observable state (e.g., loading status).
-- Mock `fetch` with `vi.stubGlobal` in `beforeEach`, restore in `afterEach`.
-- Wrap state updates in `act()` when asserting on async state changes.
+- Use `data-testid` for non-semantic observable state (e.g., loading status, error status, list container).
+- Mock `fetch` with `vi.stubGlobal` in `beforeEach` or per-test, restore in `afterEach` with `vi.unstubAllGlobals()`.
+- Wrap state updates triggered by user interactions in `act()` when asserting on async state changes.
+- Test IDs to use for PR list component: `pr-list-loading`, `pr-list-error`, `pr-list`, `pr-list-prev`, `pr-list-next`.
 
 ### File Structure
 ```
