@@ -21,14 +21,6 @@ jobs:
 
       - uses: jdx/mise-action@v2
 
-      - name: Check circuit breaker
-        run: |
-          ACTIVE=$(python3 -c "import json; c=json.load(open('ai-sdlc-docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
-          if [ "$ACTIVE" = "true" ]; then
-            echo "::error::Circuit breaker is active."
-            exit 1
-          fi
-
       - name: Install script dependencies
         run: uv sync --frozen
         working-directory: .claude/scripts

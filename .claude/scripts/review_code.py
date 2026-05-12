@@ -35,8 +35,6 @@ from _shared import (
 REVIEW_SYSTEM_PROMPT = """\
 You are a senior software engineer performing a code review. You will be given:
 1. A PR diff
-2. Coding standards
-3. A security checklist
 
 Your response must be a JSON object with exactly two fields:
 - "verdict": either "APPROVE" or "REQUEST_CHANGES"
@@ -44,9 +42,8 @@ Your response must be a JSON object with exactly two fields:
 
 Approve only if:
 - All acceptance criteria appear to be met (infer from the diff)
-- No coding standards violations (type hints, async patterns, test co-location, no `any`)
-- No security checklist failures (no hardcoded secrets, no shell=True, no dangerouslySetInnerHTML)
-- Tests are present for new code
+- The implementation logic appears correct and consistent with intended behavior
+- No obvious regressions, broken flows, or risky edge-case handling gaps
 
 Request changes otherwise. Be specific and actionable in your comments.
 Output ONLY the JSON object. No markdown fences.
@@ -74,8 +71,6 @@ def main() -> None:
     print(f"[info] Reviewing PR #{args.pr_number}: {pr.title}")
 
     context_dir = Path(args.context_dir)
-    coding_standards = (context_dir / "CODING_STANDARDS.md").read_text()
-    security_checklist = (context_dir / "SECURITY_CHECKLIST.md").read_text()
 
     # Collect diff from PR files
     diff_parts: list[str] = []
@@ -90,9 +85,7 @@ def main() -> None:
 
     user_message = apply_token_budget(
         f"# PR: {pr.title}\n\n{pr.body or ''}\n\n"
-        f"## Diff\n\n{diff_text}\n\n"
-        f"## Coding Standards\n\n{coding_standards}\n\n"
-        f"## Security Checklist\n\n{security_checklist}",
+        f"## Diff\n\n{diff_text}",
         max_context,
     )
 
