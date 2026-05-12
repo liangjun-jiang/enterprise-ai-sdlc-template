@@ -2,7 +2,7 @@ name: AI Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, labeled]
+    types: [labeled]
     branches: [dev]
 
 permissions:
@@ -12,52 +12,16 @@ permissions:
 
 jobs:
   review:
+    if: github.event.label.name == 'ready-for-ai-review'
     runs-on: ubuntu-latest
     steps:
-      - name: Gate on ai-generated label (retry for timing race)
-        id: gate
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const prNumber = context.payload.pull_request.number;
-            const maxAttempts = 6;
-            const delayMs = 5000;
-
-            let hasLabel = false;
-            for (let i = 1; i <= maxAttempts; i++) {
-              const { data: pr } = await github.rest.pulls.get({
-                owner,
-                repo,
-                pull_number: prNumber,
-              });
-              const labels = (pr.labels || []).map(l => l.name);
-              core.info(`Attempt ${i}/${maxAttempts} labels: ${labels.join(', ') || '(none)'}`);
-              if (labels.includes('ai-generated')) {
-                hasLabel = true;
-                break;
-              }
-              if (i < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-              }
-            }
-
-            core.setOutput('should_review', hasLabel ? 'true' : 'false');
-            if (!hasLabel) {
-              core.info("Skipping: PR does not have 'ai-generated' label.");
-            }
-
       - uses: actions/checkout@v4
-        if: steps.gate.outputs.should_review == 'true'
         with:
           ref: dev
 
       - uses: jdx/mise-action@v2
-        if: steps.gate.outputs.should_review == 'true'
 
       - name: Check circuit breaker
-        if: steps.gate.outputs.should_review == 'true'
         run: |
           ACTIVE=$(python3 -c "import json; c=json.load(open('ai-sdlc-docs/context/AI_PIPELINE_CONFIG.json')); print(str(c['circuit_breaker_active']).lower())")
           if [ "$ACTIVE" = "true" ]; then
@@ -66,12 +30,10 @@ jobs:
           fi
 
       - name: Install script dependencies
-        if: steps.gate.outputs.should_review == 'true'
         run: uv sync --frozen
         working-directory: .claude/scripts
 
       - name: Post AI review
-        if: steps.gate.outputs.should_review == 'true'
         run: |
           uv run --project .claude/scripts python .claude/scripts/review_code.py \
             --pr-number "${{ github.event.pull_request.number }}" \
