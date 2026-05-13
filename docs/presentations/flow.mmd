@@ -1,0 +1,25 @@
+%%{init: {
+  "theme": "base",
+  "flowchart": { "curve": "basis", "nodeSpacing": 34, "rankSpacing": 44 }
+}}%%
+flowchart LR
+    A([GitHub Issue Created<br/>Feature Request]) --> B
+    B([Developer Reviews<br/>& Approves Issue]) --> C
+    C([AI Generates<br/>Implementation Plan<br/>in Issue Thread]) --> D
+    D([Developer/Reviewer Reviews Plan<br/>+ Open Questions<br/>Adds label: ready-for-ai-coding]) --> E
+    E([AI Code Writer Workflow<br/>Uses Issue Thread + Context Docs<br/>Creates Feature Branch + Opens PR]) --> F
+    F([Human Reviewer Adds Label<br/>ready-for-ai-review]) --> G
+    G([AI Code Review Workflow<br/>ai-reviewer kicks off]) --> H
+    H([Happy Path:<br/>No Further Changes]) --> I
+    I([Human Merge]) --> J
+    J([Housekeeping Workflow<br/>Closes Issue with Branch/PR link<br/>Updates Context Docs])
+
+    classDef startEnd fill:#eff6ff,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;
+    classDef human fill:#fffbeb,stroke:#b45309,color:#0f172a,stroke-width:1.5px;
+    classDef ai fill:#f0fdf4,stroke:#16a34a,color:#0f172a,stroke-width:1.5px;
+    classDef workflow fill:#eef2ff,stroke:#4338ca,color:#0f172a,stroke-width:1.5px;
+
+    class A,J startEnd;
+    class B,D,F,H,I human;
+    class C ai;
+    class E,G workflow;
