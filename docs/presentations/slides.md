@@ -35,7 +35,7 @@ Each developer has their own AI setup:
 
 4 Pillars:
 1. **Claude SDK** — Code is generated in the cloud. Context built once, persisted, and shared across the team and the LLM.
-2. **GitHub Actions** — Automates the SDLC workflows from Issue to code generation, review, lint, test, CI/CD, and context update.
+2. **GitHub Actions** — Automates the SDLC workflows from Issue to implementation plan generation, code generation, review, lint, test, CI/CD, and context update.
 3. **GitHub Issues** — Requirements and human review start here. No new tools. Product owners, PMs, and Developers work in the same place.
 4. **Git Branches + PRs** — Each step has a human gate. Merging a PR triggers the next automated stage.
 
@@ -43,17 +43,19 @@ Each developer has their own AI setup:
 
 ## Slide 4 — Pipeline Flow (Mermaid diagram)
 
-Mental model: Issue → human review/refine/approve → AI code gen on feature branch → human code review → CI tests → human merge approval → dev
+Mental model: Issue → human review/refine/approve → AI implementation plan → human plan review → AI code gen on feature branch → human code review → CI tests → human merge approval → dev
 
 ```mermaid
 flowchart LR
     A([Issue<br/>feature / bug / task]) --> B
     B([Human Review<br/>Refine & Approve]) -->|approved| C
-    C([AI Code Gen<br/>feature branch]) --> D
-    D([Code Review<br/>PR]) -->|approved| E
-    E([CI<br/>lint / test]) -->|pass| F
-    F([Merge Approval]) -->|merge| G
-    G([dev branch<br/>+ Context Update])
+    C([AI Implementation Plan<br/>issue comment]) --> D
+    D([Human Plan Review<br/>& Answers]) -->|ready for coding| E
+    E([AI Code Gen<br/>feature branch]) --> F
+    F([Code Review<br/>PR]) -->|approved| G
+    G([CI<br/>lint / test]) -->|pass| H
+    H([Merge Approval]) -->|merge| I
+    I([dev branch<br/>+ Context Update])
 
     style A fill:#eff6ff,stroke:#2563eb,color:#0f172a
     style B fill:#fffbeb,stroke:#b45309,color:#0f172a
@@ -61,7 +63,9 @@ flowchart LR
     style D fill:#fffbeb,stroke:#b45309,color:#0f172a
     style E fill:#f0fdf4,stroke:#16a34a,color:#0f172a
     style F fill:#fffbeb,stroke:#b45309,color:#0f172a
-    style G fill:#eff6ff,stroke:#2563eb,color:#0f172a
+    style G fill:#f0fdf4,stroke:#16a34a,color:#0f172a
+    style H fill:#fffbeb,stroke:#b45309,color:#0f172a
+    style I fill:#eff6ff,stroke:#2563eb,color:#0f172a
 ```    
 Caption: Amber = Human gate (PR approval) · Green = AI-automated step
 
@@ -74,14 +78,11 @@ Demo video recorded separately.
 **What the demo shows:**
 - GitHub Issue created with a feature request
 - Developer reviews and approves the Issue
+- AI generates an implementation plan in the Issue thread
+- Developer/reviewer answers open questions and marks ready for coding
 - AI generates code on a feature branch via GitHub Actions (Claude SDK)
 - PR opened automatically; reviewer approves
 - CI runs lint + tests; merge to dev
 - Issue Closed with Branch link
 
----
 
-## Slide 6 — Challenges
-
-1. **LiteLLM gateway not accessible from Procore IT's AWS account**
-   - Used a personal GitHub account and a demo project for this demo
