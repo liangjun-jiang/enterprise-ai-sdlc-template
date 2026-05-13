@@ -26,3 +26,7 @@ Thumbs.db
 
 # mise
 .mise.local.toml
+
+guide/*
+
+.simulate-output/
